@@ -46,6 +46,8 @@ def is_num(s):
     try:
         float(s)
     except ValueError:
+        if s == "-":
+            return True
         return False
     else:
         return True
@@ -104,7 +106,7 @@ class MainWindow(tk.Frame):
         style.configure('TTreeview', font=font_md, foreground='black')
 
         self.width_canvas = 1200
-        self.height_canvas = 800
+        self.height_canvas = 1000
         dpi = 50
         if os.name == 'posix':
             fig = plt.figure(figsize=(self.width_canvas / 2 / dpi, self.height_canvas / 2 / dpi), dpi=dpi)
@@ -129,7 +131,7 @@ class MainWindow(tk.Frame):
         self.treeview = ttk.Treeview(frame_download, height=6, selectmode=tk.EXTENDED)
         self.treeview['columns'] = ['filename']
         self.treeview.column('#0', width=40, stretch=tk.NO)
-        self.treeview.column('filename', width=700, anchor=tk.CENTER)
+        self.treeview.column('filename', width=400, anchor=tk.CENTER)
         self.treeview.heading('#0', text='#')
         self.treeview.heading('filename', text='filename')
         self.treeview.bind('<<TreeviewSelect>>', self.select_data)
@@ -145,7 +147,6 @@ class MainWindow(tk.Frame):
         #vmr2 = (self.register(self.validate_map_range_2), '%P')
         vcmr1 = (self.register(self.validate_cmap_range_1), '%P')
         vcmr2 = (self.register(self.validate_cmap_range_2), '%P')
-        va = (self.register(self.validate_alpha), '%P')
         label_map_range = ttk.Label(frame_map, text='Map Range')
         #self.map_range_1 = tk.DoubleVar(value=0)
         #self.map_range_2 = tk.DoubleVar(value=1610)
@@ -156,6 +157,8 @@ class MainWindow(tk.Frame):
         self.cmap_range_2 = tk.DoubleVar(value=100)
         self.entry_cmap_range_1 = ttk.Entry(frame_map, textvariable=self.cmap_range_1, validate="key", validatecommand=vcmr1, justify=tk.CENTER, font=font_md, width=6)
         self.entry_cmap_range_2 = ttk.Entry(frame_map, textvariable=self.cmap_range_2, validate="key", validatecommand=vcmr2, justify=tk.CENTER, font=font_md, width=6)
+        self.entry_cmap_range_1.config(state=tk.DISABLED)
+        self.entry_cmap_range_2.config(state=tk.DISABLED)
         self.map_color = tk.StringVar(value='rainbow')
         label_map_color = ttk.Label(frame_map, text='Color Map')
         self.optionmenu_map_color = ttk.OptionMenu(frame_map, self.map_color, self.map_color.get(),
@@ -167,11 +170,10 @@ class MainWindow(tk.Frame):
                                                     'jet', 'nipy_spectral', 'gist_ncar']),
                                                    command=self.on_change_cmap_settings)
         self.optionmenu_map_color['menu'].config(font=font_md)
-        label_alpha = ttk.Label(frame_map, text='Alpha')
-        self.alpha = tk.DoubleVar(value=1)
-        entry_alpha = ttk.Entry(frame_map, textvariable=self.alpha, validate='key', validatecommand=va, justify=tk.CENTER, font=font_md, width=6)
         self.map_autoscale = tk.BooleanVar(value=True)
         checkbox_map_autoscale = ttk.Checkbutton(frame_map, text='Color Map Auto Scale', command=self.on_change_cmap_settings, variable=self.map_autoscale, takefocus=False)
+        self.show_refdata = tk.BooleanVar(value=False)
+        checkbox_show_refdata = ttk.Checkbutton(frame_map, text='Show Reference Data', command=self.on_change_show_ref_settings, variable=self.show_refdata, takefocus=False)
 
         label_map_range.grid(row=0, column=0, rowspan=2)
         #self.entry_map_range_1.grid(row=1, column=1)
@@ -181,9 +183,8 @@ class MainWindow(tk.Frame):
         self.entry_cmap_range_2.grid(row=2, column=2)
         label_map_color.grid(row=3, column=0)
         self.optionmenu_map_color.grid(row=3, column=1, columnspan=2, sticky=tk.EW)
-        label_alpha.grid(row=4, column=0)
-        entry_alpha.grid(row=4, column=1)
         checkbox_map_autoscale.grid(row=5, column=0, columnspan=4)
+        checkbox_show_refdata.grid(row=6, column=0, columnspan=4)
 
         # canvas_drop
         self.canvas_drop = tk.Canvas(self.master, width=self.width_canvas, height=self.height_canvas)
@@ -229,6 +230,8 @@ class MainWindow(tk.Frame):
         if self.dl_raw.spec_dict is None:
             return False
         if is_num(after):
+            if after == '-':
+                after = 0
             if float(after) < self.cmap_range_2.get():
                 self.update_plemap(cmap_range=(float(after), self.cmap_range_2.get()))
                 self.canvas.draw()
@@ -243,22 +246,11 @@ class MainWindow(tk.Frame):
         if self.dl_raw.spec_dict is None:
             return False
         if is_num(after):
+            if after == '-':
+                after = 0
             if self.cmap_range_1.get() < float(after):
                 self.update_plemap(cmap_range=(self.cmap_range_1.get(), float(after)))
                 self.canvas.draw()
-            return True
-        elif after == '':
-            return True
-        else:
-            return False
-
-    @check_map_loaded
-    def validate_alpha(self, after):
-        if self.dl_raw.spec_dict is None:
-            return False
-        if is_num(after) and 0 <= float(after) <= 1:
-            self.update_plemap(alpha=float(after))
-            self.canvas.draw()
             return True
         elif after == '':
             return True
@@ -276,12 +268,15 @@ class MainWindow(tk.Frame):
         cmap_range = self.update_plemap(
             cmap=self.map_color.get(),
             cmap_range=(self.cmap_range_1.get(), self.cmap_range_2.get()),
-            cmap_range_auto=self.map_autoscale.get(),
-            alpha=self.alpha.get())
+            cmap_range_auto=self.map_autoscale.get())
         # カラーマップの範囲を更新
         self.cmap_range_1.set(round(cmap_range[0]))
         self.cmap_range_2.set(round(cmap_range[1]))
         self.canvas.draw()
+
+    @check_map_loaded
+    def on_change_show_ref_settings(self, *args) -> None:
+        pass # TODO show reference data
 
     def download(self) -> None:
         pass # TODO download PLEmap
@@ -336,7 +331,7 @@ class MainWindow(tk.Frame):
                 '',
                 tk.END,
                 iid=str(i),
-                text=str(i),
+                text=str(os.path.basename(filename).split(".")[0].split("_")[0]),
                 values=[filename],
                 open=True,
                 )
@@ -356,7 +351,14 @@ class MainWindow(tk.Frame):
         X, Y = np.meshgrid(x, y)
         Z = self.df.values
 
-        self.contour = self.map_ax.pcolormesh(X, Y, Z, cmap=self.map_color.get(), alpha=self.alpha.get(), shading='auto', norm=Normalize(vmin=self.cmap_range_1.get(), vmax=self.cmap_range_2.get()))
+        if self.map_autoscale.get():
+            self.cmap_range_1.set(np.min(Z))
+            self.cmap_range_2.set(np.max(Z))
+        else:
+            if self.cmap_range_1.get() > self.cmap_range_2.get():
+                messagebox.showerror('Error', 'Color range is invalid.')
+                return
+        self.contour = self.map_ax.pcolormesh(X, Y, Z, cmap=self.map_color.get(), shading='auto', norm=Normalize(vmin=self.cmap_range_1.get(), vmax=self.cmap_range_2.get()))
 
         divider = make_axes_locatable(self.map_ax)
         cax = divider.append_axes('right', size='5%', pad=0.1)
@@ -367,12 +369,11 @@ class MainWindow(tk.Frame):
         self.map_ax.set_ylabel('Excitation Wavelength [nm]', fontsize=25)
         self.map_ax.grid()
 
-    def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None, alpha: float = None) -> [float, float]:
+    def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None) -> [float, float]:
         # カラーマップ関連の設定
         cmap = cmap if cmap is not None else self.map_color.get()
         cmap_range = cmap_range if cmap_range is not None else [self.cmap_range_1.get(), self.cmap_range_2.get()]
-        alpha = alpha if alpha is not None else self.alpha.get()
-        self.contour.set(alpha=alpha, cmap=cmap, norm=Normalize(vmin=cmap_range[0], vmax=cmap_range[1]))
+        self.contour.set(cmap=cmap, norm=Normalize(vmin=cmap_range[0], vmax=cmap_range[1]))
         return cmap_range
 
 
