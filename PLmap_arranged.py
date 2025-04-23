@@ -277,6 +277,11 @@ class MainWindow(tk.Frame):
     @check_map_loaded
     def on_change_show_ref_settings(self, *args) -> None:
         pass # TODO show reference data
+        df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
+        df["E11_nm"] = 1240 / df["E11_eV"]
+        df["E22_nm"] = 1240 / df["E22_eV"]
+
 
     def download(self) -> None:
         pass # TODO download PLEmap
