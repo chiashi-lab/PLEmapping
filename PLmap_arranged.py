@@ -1,122 +1,426 @@
 import os
 import numpy as np
-from numpy.lib.function_base import meshgrid
-import pandas as pd
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox
+from tkinterdnd2 import TkinterDnD, DND_FILES
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.colors import Normalize
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from dataloader import DataLoader
+import pandas as pd
 
-# 22/11/21 金田さんより
-# 読み込むファイルがascかtxtか注意
+font_lg = ('Arial', 24)
+font_md = ('Arial', 16)
+font_sm = ('Arial', 12)
 
-Extension = '.txt' #拡張子txtかascか
-start_wl = 500
-end_wl = 840
-interval = 10
-bandwidth = interval
-if_smoothing = True
+plt.rcParams['font.family'] = 'Arial'
 
-# 各種設定（波長情報はおいおい自動化したい）
-def get_parameter():
-    global start_wl, end_wl, interval, bandwidth, if_smoothing
-    print('励起波長範囲[nm](500 840など)：', end='')
-    start_wl, end_wl = map(int, input().split(' '))
-    print('励起波長測定間隔[nm]：', end='')
-    interval = int(input())
-    bandwidth = interval
-    print('smoothing?(y/n)：', end='')
-    ans = input()
-    if ans == 'y':
-        if_smoothing = True
+plt.rcParams['xtick.direction'] = 'in'
+plt.rcParams['ytick.direction'] = 'in'
+plt.rcParams['xtick.major.width'] = 1.0
+plt.rcParams['ytick.major.width'] = 1.0
+plt.rcParams['xtick.labelsize'] = 25
+plt.rcParams['ytick.labelsize'] = 25
+
+plt.rcParams['axes.linewidth'] = 1.0
+plt.rcParams['axes.labelsize'] = 35         # 軸ラベルのフォントサイズ
+plt.rcParams['axes.linewidth'] = 1.0        # グラフ囲う線の太さ
+
+plt.rcParams['legend.loc'] = 'best'        # 凡例の位置、"best"でいい感じのところ
+plt.rcParams['legend.frameon'] = True       # 凡例を囲うかどうか、Trueで囲う、Falseで囲わない
+plt.rcParams['legend.framealpha'] = 1.0     # 透過度、0.0から1.0の値を入れる
+plt.rcParams['legend.facecolor'] = 'white'  # 背景色
+plt.rcParams['legend.edgecolor'] = 'black'  # 囲いの色
+plt.rcParams['legend.fancybox'] = False     # Trueにすると囲いの四隅が丸くなる
+
+plt.rcParams['lines.linewidth'] = 1.0
+plt.rcParams['image.cmap'] = 'jet'
+plt.rcParams['figure.subplot.top'] = 0.95
+plt.rcParams['figure.subplot.bottom'] = 0.15
+plt.rcParams['figure.subplot.left'] = 0.1
+plt.rcParams['figure.subplot.right'] = 0.95
+
+def is_num(s):
+    try:
+        float(s)
+    except ValueError:
+        if s == "-":
+            return True
+        return False
     else:
-        if_smoothing = False
-    return 0
+        return True
 
-def read_asc():
-    # 指定したフォルダ内のtxtファイル名のリストアップ
-    # osによって区切り文字が違う
-    if os.name == 'nt':
-        slash = '\\'
-    elif os.name == 'posix':
-        slash = '/'
-    print('フォルダのパスを入力してください：', end='')
-    dir = input().strip('"') # windowsの「パスをコピー」ボタンでは""がついてきてしまうため
-    asc_list = []
-    for name in os.listdir(dir):
-        if Extension in name:
-            asc_list.append(name[:-4])
+def update_spec_plot(func):
+    def wrapper(*args, **kwargs):
+        args[0].ax.clear()
+        ret = func(*args, **kwargs)
+        args[0].canvas.draw()
+        return ret
+    return wrapper
 
-    # print('dir')
-    # print(dir)
-    # print('asc_list')
-    # print(asc_list)
+def check_map_loaded(func):
+    # マッピングデータが読み込まれているか確認するデコレータ
+    # 読み込まれていない場合，エラーメッセージを表示する
+    def wrapper(*args, **kwargs):
+        if len(args[0].dl_raw.spec_dict) == 0:
+            messagebox.showerror('Error', 'Choose map data.')
+            return
+        return func(*args, **kwargs)
 
-    # ascファイルの中身を読み込み，データの成型
-    for i, name in enumerate(asc_list):
-        # print('name')
-        # print(name)
-        # tmp_df = pd.read_csv(dir + slash + name + '.txt', index_col=0, header=None)
-        # tmp_df = pd.read_csv(dir + slash + name + '.asc', sep='\t', index_col=0, header=None, usecols=[1,2]) #読み込み先のファイル形式，データ形式に合わせて変える
-        tmp_df = pd.read_csv(dir + slash + name + Extension, index_col=0, header=None, encoding="shift-jis", skiprows=9)  # 読み込み先のファイル形式，データ形式に合わせて変える
-        # tmp_df = tmp_df.drop(tmp_df.columns[[0]], axis=1)
-        # print('tmp_df')
-        # print(tmp_df)
-        tmp_df.columns = [name]
-        # print(tmp_df)
-        if i == 0:
-            df = tmp_df
+    return wrapper
+
+
+class MainWindow(tk.Frame):
+    def __init__(self, master: tk.Tk):
+        super().__init__(master)
+        self.master = master
+
+        self.x0, self.y0, self.x1, self.y1 = 0, 0, 0, 0
+        self.rectangles = []
+        self.texts = []
+        self.ranges = []
+        self.drawing = False
+        self.rect_drawing = None
+
+        self.new_window = None
+        self.widgets_assign = {}
+
+        self.dl_raw = DataLoader()
+
+        self.create_widgets()
+
+    def create_widgets(self) -> None:
+        # スタイル設定
+        style = ttk.Style()
+        style.theme_use('winnative')
+        style.configure('TButton', font=font_md, width=14, padding=[0, 4, 0, 4], foreground='black')
+        style.configure('R.TButton', font=font_md, width=14, padding=[0, 4, 0, 4], foreground='red')
+        style.configure('TLabel', font=font_sm, padding=[0, 4, 0, 4], foreground='black')
+        style.configure('Color.TLabel', font=font_lg, padding=[0, 0, 0, 0], width=4, background='black')
+        style.configure('TEntry', font=font_md, width=14, padding=[0, 4, 0, 4], foreground='black')
+        style.configure('TCheckbutton', font=font_md, padding=[0, 4, 0, 4], foreground='black')
+        style.configure('TMenubutton', font=font_md, padding=[20, 4, 0, 4], foreground='black')
+        style.configure('TCombobox', font=font_md, padding=[20, 4, 0, 4], foreground='black')
+        style.configure('TTreeview', font=font_md, foreground='black')
+
+        self.width_canvas = 1300
+        self.height_canvas = 1500
+        dpi = 50
+        if os.name == 'posix':
+            fig = plt.figure(figsize=(self.width_canvas / 2 / dpi, self.height_canvas / 2 / dpi), dpi=dpi)
         else:
-            df = pd.merge(df, tmp_df, left_index=True, right_index=True)
-    df.sort_index(axis=0, ascending=True, inplace=True)
-    df.sort_index(axis=1, ascending=True, inplace=True)
-    print(df)
-    df_col = np.arange(start_wl, end_wl + interval, interval)
-    print(df_col)
-    # print(df.shape[1])
-    # print(df_col.shape[0])
-    if df.shape[1] != df_col.shape[0]: #励起波長の範囲・間隔が，データの個数と一致していないとエラー
-        print('Error：励起波長の範囲と間隔が不適切です')
-    df.columns = np.arange(start_wl, end_wl + interval, interval)
-    df = df.T
+            fig = plt.figure(figsize=(self.width_canvas / dpi, self.height_canvas / dpi), dpi=dpi)
 
-    return df
+        self.ax = fig.add_subplot(211)
+        self.map_ax = fig.add_subplot(212)
 
-# スムージング処理
-def smooth(df):
-    df_ret = df.copy()
-    smoothed_wl = np.linspace(start_wl, end_wl, 512)
-    for wl in smoothed_wl:
-        if not wl in df.index:
-            df_ret.loc[wl] = np.NaN
-    df_ret.sort_index(axis=0, ascending=True, inplace=True)
-    df_ret.interpolate(inplace=True)
-    return df_ret
+        self.canvas = FigureCanvasTkAgg(fig, self.master)
+        self.canvas.get_tk_widget().grid(row=0, column=0, rowspan=3)
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.master, pack_toolbar=False)
+        self.toolbar.update()
+        self.toolbar.grid(row=3, column=0)
+
+        frame_download = ttk.LabelFrame(self.master, text='mapping spectra')
+        frame_map = ttk.LabelFrame(self.master, text='mapping settings')
+        frame_download.grid(row=0, column=1)
+        frame_map.grid(row=2, column=1)
+
+        # frame_listbox
+        self.treeview = ttk.Treeview(frame_download, height=6, selectmode=tk.EXTENDED)
+        self.treeview['columns'] = ['filename']
+        self.treeview.column('#0', width=40, stretch=tk.NO)
+        self.treeview.column('filename', width=400, anchor=tk.CENTER)
+        self.treeview.heading('#0', text='#')
+        self.treeview.heading('filename', text='filename')
+        self.treeview.bind('<<TreeviewSelect>>', self.select_data)
+        self.treeview.bind('<Button-2>', self.delete_data)
+        self.treeview.bind('<Button-3>', self.delete_data)
+
+        self.button_download = ttk.Button(frame_download, text='DOWNLOAD', command=self.download, state=tk.DISABLED)
+        self.treeview.pack()
+        self.button_download.pack()
+
+                # frame_map
+        #vmr1 = (self.register(self.validate_map_range_1), '%P')
+        #vmr2 = (self.register(self.validate_map_range_2), '%P')
+        vcmr1 = (self.register(self.validate_cmap_range_1), '%P')
+        vcmr2 = (self.register(self.validate_cmap_range_2), '%P')
+        label_map_range = ttk.Label(frame_map, text='Map Range')
+        #self.map_range_1 = tk.DoubleVar(value=0)
+        #self.map_range_2 = tk.DoubleVar(value=1610)
+        #self.entry_map_range_1 = ttk.Entry(frame_map, textvariable=self.map_range_1, validate="key", validatecommand=vmr1, justify=tk.CENTER, font=font_md, width=6)
+        #self.entry_map_range_2 = ttk.Entry(frame_map, textvariable=self.map_range_2, validate="key", validatecommand=vmr2, justify=tk.CENTER, font=font_md, width=6)
+        label_cmap_range = ttk.Label(frame_map, text='Color Range')
+        self.cmap_range_1 = tk.DoubleVar(value=0)
+        self.cmap_range_2 = tk.DoubleVar(value=100)
+        self.entry_cmap_range_1 = ttk.Entry(frame_map, textvariable=self.cmap_range_1, validate="key", validatecommand=vcmr1, justify=tk.CENTER, font=font_md, width=6)
+        self.entry_cmap_range_2 = ttk.Entry(frame_map, textvariable=self.cmap_range_2, validate="key", validatecommand=vcmr2, justify=tk.CENTER, font=font_md, width=6)
+        self.entry_cmap_range_1.config(state=tk.DISABLED)
+        self.entry_cmap_range_2.config(state=tk.DISABLED)
+        self.map_color = tk.StringVar(value='rainbow')
+        label_map_color = ttk.Label(frame_map, text='Color Map')
+        self.optionmenu_map_color = ttk.OptionMenu(frame_map, self.map_color, self.map_color.get(),
+                                           *sorted(['viridis', 'plasma', 'inferno', 'magma', 'cividis',
+                                                    'Wistia', 'hot', 'binary', 'bone', 'cool', 'copper',
+                                                    'gray', 'pink', 'spring', 'summer', 'autumn', 'winter',
+                                                    'RdBu', 'Spectral', 'bwr', 'coolwarm', 'hsv', 'twilight',
+                                                    'CMRmap', 'cubehelix', 'brg', 'gist_rainbow', 'rainbow',
+                                                    'jet', 'nipy_spectral', 'gist_ncar']),
+                                                   command=self.on_change_cmap_settings)
+        self.optionmenu_map_color['menu'].config(font=font_md)
+        self.map_autoscale = tk.BooleanVar(value=True)
+        checkbox_map_autoscale = ttk.Checkbutton(frame_map, text='Color Map Auto Scale', command=self.on_change_cmap_settings, variable=self.map_autoscale, takefocus=False)
+        self.show_refdata = tk.BooleanVar(value=False)
+        checkbox_show_refdata = ttk.Checkbutton(frame_map, text='Show Reference Data', command=self.on_change_show_ref_settings, variable=self.show_refdata, takefocus=False)
+
+        label_map_range.grid(row=0, column=0, rowspan=2)
+        #self.entry_map_range_1.grid(row=1, column=1)
+        #self.entry_map_range_2.grid(row=1, column=2)
+        label_cmap_range.grid(row=2, column=0)
+        self.entry_cmap_range_1.grid(row=2, column=1)
+        self.entry_cmap_range_2.grid(row=2, column=2)
+        label_map_color.grid(row=3, column=0)
+        self.optionmenu_map_color.grid(row=3, column=1, columnspan=2, sticky=tk.EW)
+        checkbox_map_autoscale.grid(row=5, column=0, columnspan=4)
+        checkbox_show_refdata.grid(row=6, column=0, columnspan=4)
+
+        # canvas_drop
+        self.canvas_drop = tk.Canvas(self.master, width=self.width_canvas, height=self.height_canvas)
+        self.canvas_drop.create_rectangle(0, 0, self.width_canvas, self.height_canvas, fill='lightgray')
+        self.canvas_drop.create_text(self.width_canvas / 2, self.height_canvas * 1 / 2, text='Data Drop Here',
+                                     font=('Arial', 30))
+
+
+    """
+    def validate_map_range_1(self, after):
+        if self.dl_raw.spec_dict is None:
+            return False
+        if is_num(after):
+            if float(after) < self.map_range_2.get():
+                cmap_range = self.map_manager.update_map(map_range=(float(after), self.map_range_2.get()))
+                self.cmap_range_1.set(round(cmap_range[0]))
+                self.cmap_range_2.set(round(cmap_range[1]))
+                self.canvas.draw()
+            return True
+        elif after == '':
+            return True
+        else:
+            return False
+
+    def validate_map_range_2(self, after):
+        if self.dl_raw.spec_dict is None:
+            return False
+        if is_num(after):
+            if self.map_range_1.get() < float(after):
+                cmap_range = self.map_manager.update_map(map_range=(self.map_range_1.get(), float(after)))
+                self.cmap_range_1.set(round(cmap_range[0]))
+                self.cmap_range_2.set(round(cmap_range[1]))
+                self.canvas.draw()
+            return True
+        elif after == '':
+            return True
+        else:
+            return False
+    """
+
+    @check_map_loaded
+    def validate_cmap_range_1(self, after):
+        if self.dl_raw.spec_dict is None:
+            return False
+        if is_num(after):
+            if after == '-':
+                after = 0
+            if float(after) < self.cmap_range_2.get():
+                self.update_plemap(cmap_range=(float(after), self.cmap_range_2.get()))
+                self.canvas.draw()
+            return True
+        elif after == '':
+            return True
+        else:
+            return False
+
+    @check_map_loaded
+    def validate_cmap_range_2(self, after):
+        if self.dl_raw.spec_dict is None:
+            return False
+        if is_num(after):
+            if after == '-':
+                after = 0
+            if self.cmap_range_1.get() < float(after):
+                self.update_plemap(cmap_range=(self.cmap_range_1.get(), float(after)))
+                self.canvas.draw()
+            return True
+        elif after == '':
+            return True
+        else:
+            return False
+
+    @check_map_loaded
+    def on_change_cmap_settings(self, *args) -> None:
+        if self.map_autoscale.get():
+            self.entry_cmap_range_1.config(state=tk.DISABLED)
+            self.entry_cmap_range_2.config(state=tk.DISABLED)
+        else:
+            self.entry_cmap_range_1.config(state=tk.NORMAL)
+            self.entry_cmap_range_2.config(state=tk.NORMAL)
+        cmap_range = self.update_plemap(
+            cmap=self.map_color.get(),
+            cmap_range=(self.cmap_range_1.get(), self.cmap_range_2.get()),
+            cmap_range_auto=self.map_autoscale.get())
+        # カラーマップの範囲を更新
+        self.cmap_range_1.set(round(cmap_range[0]))
+        self.cmap_range_2.set(round(cmap_range[1]))
+        self.canvas.draw()
+
+    @check_map_loaded
+    def on_change_show_ref_settings(self, *args) -> None:
+        if self.show_refdata.get():
+            self.lefebre_scatter.set_visible(True)
+            self.legend.set_visible(True)
+            for txt in self.lefebre_txt:
+                txt.set_visible(True)
+        else:
+            self.lefebre_scatter.set_visible(False)
+            self.legend.set_visible(False)
+            for txt in self.lefebre_txt:
+                txt.set_visible(False)
+        self.canvas.draw()
+
+    def download(self) -> None:
+        pass # TODO download PLEmap
+
+    @update_spec_plot
+    def select_data(self, event) -> None:
+        if self.treeview.focus() == '':
+            return
+        key = self.treeview.item(self.treeview.focus())['values'][0]
+        self.show_spectrum(self.dl_raw.spec_dict[key])
+
+    @update_spec_plot
+    def delete_data(self, event) -> None:
+        if self.treeview.focus() == '':
+            return
+        key = self.treeview.item(self.treeview.focus())['values'][0]
+        ok = messagebox.askyesno('確認', f'Delete {key}?')
+        if not ok:
+            return
+        self.dl_raw.delete_file(key)
+
+        self.update_treeview()
+        self.msg.set(f'Deleted {key}.')
+
+    @update_spec_plot
+    def drop(self, event=None) -> None:
+        self.canvas_drop.place_forget()
+        if event.data[0] == '{':
+            filenames = list(map(lambda x: x.strip('{').strip('}'), event.data.split('} {')))
+        else:
+            filenames = event.data.split()
+        filenames = sorted(filenames, key=lambda x: os.path.basename(x).split(".")[0].split("_")[0])#filename先頭に波長が入っていることを前提にfilenameでソートしている
+        self.excite_wl_list = [int(os.path.basename(filename).split(".")[0].split("_")[0]) for filename in filenames]
+        self.dl_raw.load_files(filenames)
+        self.show_spectrum(self.dl_raw.spec_dict[filenames[0]])
+        self.update_treeview()
+        self.show_plemap()
+
+    def drop_enter(self, event: TkinterDnD.DnDEvent) -> None:
+        self.canvas_drop.place(anchor='nw', x=0, y=0)
+
+    def drop_leave(self, event: TkinterDnD.DnDEvent) -> None:
+        self.canvas_drop.place_forget()
+
+    def show_spectrum(self, spectrum) -> None:
+        self.ax.plot(spectrum.xdata, spectrum.ydata, color='black', linewidth=1.0)
+
+    def update_treeview(self) -> None:
+        self.treeview.delete(*self.treeview.get_children())
+        for i, filename in enumerate(self.dl_raw.spec_dict.keys()):
+            self.treeview.insert(
+                '',
+                tk.END,
+                iid=str(i),
+                text=str(os.path.basename(filename).split(".")[0].split("_")[0]),
+                values=[filename],
+                open=True,
+                )
+
+    def show_plemap(self) -> None:
+        #ple mapの表示
+        self.ple_df = {}
+        for i, spectrum in enumerate(self.dl_raw.spec_dict.values()):
+            temp_df = {}
+            for j, wl in enumerate(spectrum.xdata):
+                temp_df[wl] = spectrum.ydata[j]
+            self.ple_df[self.excite_wl_list[i]] = temp_df
+        self.ple_df = pd.DataFrame(self.ple_df).T
+
+        self.ple_x = self.ple_df.columns#emission wavelength
+        self.ple_y = self.ple_df.index#excitation wavelength
+        yticks = np.linspace(self.excite_wl_list[0], self.excite_wl_list[-1], 5)
+        X, Y = np.meshgrid(self.ple_x, self.ple_y)
+        Z = self.ple_df.values
+
+        if self.map_autoscale.get():
+            self.cmap_range_1.set(np.min(Z))
+            self.cmap_range_2.set(np.max(Z))
+        else:
+            if self.cmap_range_1.get() > self.cmap_range_2.get():
+                messagebox.showerror('Error', 'Color range is invalid.')
+                return
+        self.contour = self.map_ax.pcolormesh(X, Y, Z, cmap=self.map_color.get(), shading='auto', norm=Normalize(vmin=self.cmap_range_1.get(), vmax=self.cmap_range_2.get()))
+
+        divider = make_axes_locatable(self.map_ax)
+        cax = divider.append_axes('right', size='5%', pad=0.1)
+        pp = self.map_ax.figure.colorbar(self.contour, cax=cax, orientation='vertical')
+
+        # 既知のPLEmapデータを表示
+        lefebre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        lefebre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
+        lefebre_df["E11_nm"] = 1240 / lefebre_df["E11_eV"]
+        lefebre_df["E22_nm"] = 1240 / lefebre_df["E22_eV"]
+        lefebre_df_filtered = lefebre_df[(min(self.ple_y) <= lefebre_df["E22_nm"]) & (lefebre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebre_df["E11_nm"]) & (lefebre_df["E11_nm"] <= max(self.ple_x))]
+        self.lefebre_scatter = self.map_ax.scatter(lefebre_df_filtered["E11_nm"], lefebre_df_filtered["E22_nm"], color='black', s=70, label='LeFebre 2007', marker='x')
+        self.lefebre_txt =[]
+        for i in range(len(lefebre_df_filtered)):
+            self.lefebre_txt.append(self.map_ax.text(lefebre_df_filtered["E11_nm"].iloc[i], lefebre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebre_df_filtered["n"].iloc[i]))}, {str(int(lefebre_df_filtered["m"].iloc[i]))})", fontsize=40, color='black', ha='left', va='bottom'))
+        self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
+        if self.show_refdata.get():
+            self.lefebre_scatter.set_visible(True)
+            self.legend.set_visible(True)
+            for txt in self.lefebre_txt:
+                txt.set_visible(True)
+        else:
+            self.lefebre_scatter.set_visible(False)
+            self.legend.set_visible(False)
+            for txt in self.lefebre_txt:
+                txt.set_visible(False)
+
+        self.map_ax.set_yticks(yticks)
+        self.map_ax.set_xlabel('Emission Wavelength [nm]', fontsize=25)
+        self.map_ax.set_ylabel('Excitation Wavelength [nm]', fontsize=25)
+        self.map_ax.grid()
+
+    def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None) -> [float, float]:
+        # カラーマップ関連の設定
+        cmap = cmap if cmap is not None else self.map_color.get()
+        cmap_range = cmap_range if cmap_range is not None else [self.cmap_range_1.get(), self.cmap_range_2.get()]
+        self.contour.set(cmap=cmap, norm=Normalize(vmin=cmap_range[0], vmax=cmap_range[1]))
+        return cmap_range
+
+
+
+def main():
+    root = TkinterDnD.Tk()
+    app = MainWindow(master=root)
+    root.protocol('WM_DELETE_WINDOW', app.quit)
+    root.drop_target_register(DND_FILES)
+    root.dnd_bind('<<DropEnter>>', app.drop_enter)
+    root.dnd_bind('<<DropLeave>>', app.drop_leave)
+    root.dnd_bind('<<Drop>>', app.drop)
+    app.mainloop()
+
 
 if __name__ == '__main__':
-    # 描画用データの用意
-    get_parameter()
-    df = read_asc()
-    if if_smoothing:
-        df = smooth(df)
-    x = df.columns
-    y = df.index
-    yticks = np.arange(start_wl, end_wl + interval, interval*2)
-    X, Y = np.meshgrid(x, y)
-    Z = df.values
-
-    # グラフ描画
-    fig = plt.figure(figsize=(8, 8))
-    ax = fig.add_subplot(111, aspect='equal')
-    # contour = ax.pcolormesh(X, Y, Z, cmap='rainbow', shading='auto', norm=Normalize(vmin=0, vmax=3000))
-    contour = ax.pcolormesh(X, Y, Z, cmap='rainbow', shading='auto', norm=Normalize(vmin=250, vmax=2000)) #コンター図のカラーバー調整
-
-    # カラーバー調整用
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes('right', size='5%', pad=0.1)
-    pp = fig.colorbar(contour, cax=cax, orientation='vertical')
-
-    ax.set_yticks(yticks)
-    ax.set_xlabel('Emission Wavelength [nm]')
-    ax.set_ylabel('Excitation Wavelength [nm]')
-    ax.grid()
-    plt.show()
+    main()
