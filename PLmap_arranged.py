@@ -105,8 +105,8 @@ class MainWindow(tk.Frame):
         style.configure('TCombobox', font=font_md, padding=[20, 4, 0, 4], foreground='black')
         style.configure('TTreeview', font=font_md, foreground='black')
 
-        self.width_canvas = 1200
-        self.height_canvas = 1000
+        self.width_canvas = 1300
+        self.height_canvas = 1500
         dpi = 50
         if os.name == 'posix':
             fig = plt.figure(figsize=(self.width_canvas / 2 / dpi, self.height_canvas / 2 / dpi), dpi=dpi)
@@ -276,12 +276,17 @@ class MainWindow(tk.Frame):
 
     @check_map_loaded
     def on_change_show_ref_settings(self, *args) -> None:
-        pass # TODO show reference data
-        df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
-        df["E11_nm"] = 1240 / df["E11_eV"]
-        df["E22_nm"] = 1240 / df["E22_eV"]
-
+        if self.show_refdata.get():
+            self.lefebre_scatter.set_visible(True)
+            self.legend.set_visible(True)
+            for txt in self.lefebre_txt:
+                txt.set_visible(True)
+        else:
+            self.lefebre_scatter.set_visible(False)
+            self.legend.set_visible(False)
+            for txt in self.lefebre_txt:
+                txt.set_visible(False)
+        self.canvas.draw()
 
     def download(self) -> None:
         pass # TODO download PLEmap
@@ -342,19 +347,20 @@ class MainWindow(tk.Frame):
                 )
 
     def show_plemap(self) -> None:
-        self.df = {}
+        #ple mapの表示
+        self.ple_df = {}
         for i, spectrum in enumerate(self.dl_raw.spec_dict.values()):
             temp_df = {}
             for j, wl in enumerate(spectrum.xdata):
                 temp_df[wl] = spectrum.ydata[j]
-            self.df[self.excite_wl_list[i]] = temp_df
-        self.df = pd.DataFrame(self.df).T
+            self.ple_df[self.excite_wl_list[i]] = temp_df
+        self.ple_df = pd.DataFrame(self.ple_df).T
 
-        x = self.df.columns
-        y = self.df.index
+        self.ple_x = self.ple_df.columns#emission wavelength
+        self.ple_y = self.ple_df.index#excitation wavelength
         yticks = np.linspace(self.excite_wl_list[0], self.excite_wl_list[-1], 5)
-        X, Y = np.meshgrid(x, y)
-        Z = self.df.values
+        X, Y = np.meshgrid(self.ple_x, self.ple_y)
+        Z = self.ple_df.values
 
         if self.map_autoscale.get():
             self.cmap_range_1.set(np.min(Z))
@@ -368,6 +374,28 @@ class MainWindow(tk.Frame):
         divider = make_axes_locatable(self.map_ax)
         cax = divider.append_axes('right', size='5%', pad=0.1)
         pp = self.map_ax.figure.colorbar(self.contour, cax=cax, orientation='vertical')
+
+        # 既知のPLEmapデータを表示
+        lefebre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        lefebre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
+        lefebre_df["E11_nm"] = 1240 / lefebre_df["E11_eV"]
+        lefebre_df["E22_nm"] = 1240 / lefebre_df["E22_eV"]
+        lefebre_df_filtered = lefebre_df[(min(self.ple_y) <= lefebre_df["E22_nm"]) & (lefebre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebre_df["E11_nm"]) & (lefebre_df["E11_nm"] <= max(self.ple_x))]
+        self.lefebre_scatter = self.map_ax.scatter(lefebre_df_filtered["E11_nm"], lefebre_df_filtered["E22_nm"], color='black', s=70, label='LeFebre 2007', marker='x')
+        self.lefebre_txt =[]
+        for i in range(len(lefebre_df_filtered)):
+            self.lefebre_txt.append(self.map_ax.text(lefebre_df_filtered["E11_nm"].iloc[i], lefebre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebre_df_filtered["n"].iloc[i]))}, {str(int(lefebre_df_filtered["m"].iloc[i]))})", fontsize=40, color='black', ha='left', va='bottom'))
+        self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
+        if self.show_refdata.get():
+            self.lefebre_scatter.set_visible(True)
+            self.legend.set_visible(True)
+            for txt in self.lefebre_txt:
+                txt.set_visible(True)
+        else:
+            self.lefebre_scatter.set_visible(False)
+            self.legend.set_visible(False)
+            for txt in self.lefebre_txt:
+                txt.set_visible(False)
 
         self.map_ax.set_yticks(yticks)
         self.map_ax.set_xlabel('Emission Wavelength [nm]', fontsize=25)
