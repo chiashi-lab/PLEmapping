@@ -105,8 +105,8 @@ class MainWindow(tk.Frame):
         style.configure('TCombobox', font=font_md, padding=[20, 4, 0, 4], foreground='black')
         style.configure('TTreeview', font=font_md, foreground='black')
 
-        self.width_canvas = 1300
-        self.height_canvas = 1500
+        self.width_canvas = 900
+        self.height_canvas = 600
         dpi = 50
         if os.name == 'posix':
             fig = plt.figure(figsize=(self.width_canvas / 2 / dpi, self.height_canvas / 2 / dpi), dpi=dpi)
@@ -131,7 +131,7 @@ class MainWindow(tk.Frame):
         self.treeview = ttk.Treeview(frame_download, height=6, selectmode=tk.EXTENDED)
         self.treeview['columns'] = ['filename']
         self.treeview.column('#0', width=40, stretch=tk.NO)
-        self.treeview.column('filename', width=400, anchor=tk.CENTER)
+        self.treeview.column('filename', width=300, anchor=tk.CENTER)
         self.treeview.heading('#0', text='#')
         self.treeview.heading('filename', text='filename')
         self.treeview.bind('<<TreeviewSelect>>', self.select_data)
@@ -396,11 +396,30 @@ class MainWindow(tk.Frame):
             self.legend.set_visible(False)
             for txt in self.lefebre_txt:
                 txt.set_visible(False)
+        
+        #raman lineの表示
+        raman_df = pd.read_csv(r"data/PL_RamanLine.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        raman_df.columns = ["excite_wavelength_nm", "Rayleigh_eV", "D_nm", "D_eV", "G_nm", "2D_nm", "2G_nm", "G+2D_nm", "4D_nm", "2G+2D_nm", "G+4D_nm", "6D_nm"]
+        excitefiltered_raman_df = raman_df[(min(self.ple_y) <= raman_df["excite_wavelength_nm"]) & (raman_df["excite_wavelength_nm"] <= max(self.ple_y))]
+        self.raman_lines = []
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "D_nm"))
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "G_nm"))
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "2D_nm"))
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "2G_nm"))
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "G+2D_nm"))
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "4D_nm"))
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "2G+2D_nm"))
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "G+4D_nm"))
+        self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "6D_nm"))
 
         self.map_ax.set_yticks(yticks)
         self.map_ax.set_xlabel('Emission Wavelength [nm]', fontsize=25)
         self.map_ax.set_ylabel('Excitation Wavelength [nm]', fontsize=25)
         self.map_ax.grid()
+
+    def _filter_plot(self, df:pd.DataFrame, col: str) -> list:
+        filtered_df = df[(min(self.ple_x) <= df[col]) & (df[col] <= max(self.ple_x))]
+        return self.map_ax.plot(filtered_df[col], filtered_df["excite_wavelength_nm"], color='black', linestyle='--')
 
     def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None) -> [float, float]:
         # カラーマップ関連の設定
