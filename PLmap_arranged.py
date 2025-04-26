@@ -105,8 +105,8 @@ class MainWindow(tk.Frame):
         style.configure('TCombobox', font=font_md, padding=[20, 4, 0, 4], foreground='black')
         style.configure('TTreeview', font=font_md, foreground='black')
 
-        self.width_canvas = 1300
-        self.height_canvas = 1500
+        self.width_canvas = 900
+        self.height_canvas = 600
         dpi = 50
         if os.name == 'posix':
             fig = plt.figure(figsize=(self.width_canvas / 2 / dpi, self.height_canvas / 2 / dpi), dpi=dpi)
@@ -122,16 +122,16 @@ class MainWindow(tk.Frame):
         self.toolbar.update()
         self.toolbar.grid(row=3, column=0)
 
-        frame_download = ttk.LabelFrame(self.master, text='mapping spectra')
-        frame_map = ttk.LabelFrame(self.master, text='mapping settings')
+        frame_download = ttk.LabelFrame(self.master, text='download')
+        frame_map = ttk.LabelFrame(self.master, text='settings')
         frame_download.grid(row=0, column=1)
-        frame_map.grid(row=2, column=1)
+        frame_map.grid(row=1, column=1)
 
         # frame_listbox
         self.treeview = ttk.Treeview(frame_download, height=6, selectmode=tk.EXTENDED)
         self.treeview['columns'] = ['filename']
         self.treeview.column('#0', width=40, stretch=tk.NO)
-        self.treeview.column('filename', width=400, anchor=tk.CENTER)
+        self.treeview.column('filename', width=300, anchor=tk.CENTER)
         self.treeview.heading('#0', text='#')
         self.treeview.heading('filename', text='filename')
         self.treeview.bind('<<TreeviewSelect>>', self.select_data)
@@ -174,6 +174,8 @@ class MainWindow(tk.Frame):
         checkbox_map_autoscale = ttk.Checkbutton(frame_map, text='Color Map Auto Scale', command=self.on_change_cmap_settings, variable=self.map_autoscale, takefocus=False)
         self.show_refdata = tk.BooleanVar(value=False)
         checkbox_show_refdata = ttk.Checkbutton(frame_map, text='Show Reference Data', command=self.on_change_show_ref_settings, variable=self.show_refdata, takefocus=False)
+        self.show_ramanline = tk.BooleanVar(value=False)
+        checkbox_show_ramanline = ttk.Checkbutton(frame_map, text='Show Raman Line', command=self.on_change_show_ramanline_settings, variable=self.show_ramanline, takefocus=False)
 
         label_map_range.grid(row=0, column=0, rowspan=2)
         #self.entry_map_range_1.grid(row=1, column=1)
@@ -185,6 +187,7 @@ class MainWindow(tk.Frame):
         self.optionmenu_map_color.grid(row=3, column=1, columnspan=2, sticky=tk.EW)
         checkbox_map_autoscale.grid(row=5, column=0, columnspan=4)
         checkbox_show_refdata.grid(row=6, column=0, columnspan=4)
+        checkbox_show_ramanline.grid(row=7, column=0, columnspan=4)
 
         # canvas_drop
         self.canvas_drop = tk.Canvas(self.master, width=self.width_canvas, height=self.height_canvas)
@@ -260,6 +263,8 @@ class MainWindow(tk.Frame):
     @check_map_loaded
     def on_change_cmap_settings(self, *args) -> None:
         if self.map_autoscale.get():
+            self.cmap_range_1.set(np.min(self.ple_df.values))
+            self.cmap_range_2.set(np.max(self.ple_df.values))
             self.entry_cmap_range_1.config(state=tk.DISABLED)
             self.entry_cmap_range_2.config(state=tk.DISABLED)
         else:
@@ -286,6 +291,20 @@ class MainWindow(tk.Frame):
             self.legend.set_visible(False)
             for txt in self.lefebre_txt:
                 txt.set_visible(False)
+        self.canvas.draw()
+
+    @check_map_loaded
+    def on_change_show_ramanline_settings(self, *args) -> None:
+        if self.show_ramanline.get():
+            for raman_line in self.raman_lines:
+                raman_line.set_visible(True)
+            for raman_txt in self.raman_txts:
+                raman_txt.set_visible(True)
+        else:
+            for raman_line in self.raman_lines:
+                raman_line.set_visible(False)
+            for raman_txt in self.raman_txts:
+                raman_txt.set_visible(False)
         self.canvas.draw()
 
     def download(self) -> None:
@@ -376,6 +395,8 @@ class MainWindow(tk.Frame):
         pp = self.map_ax.figure.colorbar(self.contour, cax=cax, orientation='vertical')
 
         # 既知のPLEmapデータを表示
+        ple_tick_fontsize = 40
+        ple_label_fontsize = 30
         lefebre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
         lefebre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
         lefebre_df["E11_nm"] = 1240 / lefebre_df["E11_eV"]
@@ -384,23 +405,39 @@ class MainWindow(tk.Frame):
         self.lefebre_scatter = self.map_ax.scatter(lefebre_df_filtered["E11_nm"], lefebre_df_filtered["E22_nm"], color='black', s=70, label='LeFebre 2007', marker='x')
         self.lefebre_txt =[]
         for i in range(len(lefebre_df_filtered)):
-            self.lefebre_txt.append(self.map_ax.text(lefebre_df_filtered["E11_nm"].iloc[i], lefebre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebre_df_filtered["n"].iloc[i]))}, {str(int(lefebre_df_filtered["m"].iloc[i]))})", fontsize=40, color='black', ha='left', va='bottom'))
+            self.lefebre_txt.append(self.map_ax.text(lefebre_df_filtered["E11_nm"].iloc[i], lefebre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebre_df_filtered["n"].iloc[i]))}, {str(int(lefebre_df_filtered["m"].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
-        if self.show_refdata.get():
-            self.lefebre_scatter.set_visible(True)
-            self.legend.set_visible(True)
-            for txt in self.lefebre_txt:
-                txt.set_visible(True)
-        else:
-            self.lefebre_scatter.set_visible(False)
-            self.legend.set_visible(False)
-            for txt in self.lefebre_txt:
-                txt.set_visible(False)
+        self.on_change_show_ref_settings()
 
-        self.map_ax.set_yticks(yticks)
-        self.map_ax.set_xlabel('Emission Wavelength [nm]', fontsize=25)
-        self.map_ax.set_ylabel('Excitation Wavelength [nm]', fontsize=25)
+        #raman lineの表示
+        raman_df = pd.read_csv(r"data/PL_RamanLine.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        raman_df.columns = ["excite_wavelength_nm", "Rayleigh_eV", "D_nm", "D_eV", "G_nm", "2D_nm", "2G_nm", "G+2D_nm", "4D_nm", "2G+2D_nm", "G+4D_nm", "6D_nm"]
+        excitefiltered_raman_df = raman_df[(min(self.ple_y) <= raman_df["excite_wavelength_nm"]) & (raman_df["excite_wavelength_nm"] <= max(self.ple_y))]
+        self.raman_lines = []
+        self.raman_txts = []
+        #self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "D_nm")
+        self._filter_plot(excitefiltered_raman_df, "G_nm")
+        self._filter_plot(excitefiltered_raman_df, "2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "2G_nm")
+        self._filter_plot(excitefiltered_raman_df, "G+2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "4D_nm")
+        self._filter_plot(excitefiltered_raman_df, "2G+2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "G+4D_nm")
+        self._filter_plot(excitefiltered_raman_df, "6D_nm")
+        self.on_change_show_ramanline_settings()
+
+        self.map_ax.tick_params(labelsize=ple_tick_fontsize)
+        self.map_ax.set_xlabel('Emission Wavelength [nm]', fontsize=ple_label_fontsize)
+        self.map_ax.set_ylabel('Excitation Wavelength [nm]', fontsize=ple_label_fontsize)
         self.map_ax.grid()
+
+    def _filter_plot(self, df:pd.DataFrame, col: str) -> None:
+        filtered_df = df[(min(self.ple_x) <= df[col]) & (df[col] <= max(self.ple_x))]
+        filtered_df = filtered_df.reset_index(drop=True)
+        if len(filtered_df) == 0:
+            return
+        self.raman_lines.append(self.map_ax.plot(filtered_df[col], filtered_df["excite_wavelength_nm"], color='black', linestyle='--')[0])
+        self.raman_txts.append(self.map_ax.text(filtered_df[col][0], filtered_df["excite_wavelength_nm"][0], col.split("_")[0], fontsize=20, color='black', ha='left', va='bottom', alpha=0.8))
 
     def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None) -> [float, float]:
         # カラーマップ関連の設定
