@@ -143,15 +143,17 @@ class MainWindow(tk.Frame):
         self.button_download.pack()
 
                 # frame_map
-        #vmr1 = (self.register(self.validate_map_range_1), '%P')
-        #vmr2 = (self.register(self.validate_map_range_2), '%P')
+        vmr1 = (self.register(self.validate_emission_range_1), '%P')
+        vmr2 = (self.register(self.validate_emission_range_2), '%P')
         vcmr1 = (self.register(self.validate_cmap_range_1), '%P')
         vcmr2 = (self.register(self.validate_cmap_range_2), '%P')
-        label_map_range = ttk.Label(frame_map, text='Map Range')
-        #self.map_range_1 = tk.DoubleVar(value=0)
-        #self.map_range_2 = tk.DoubleVar(value=1610)
-        #self.entry_map_range_1 = ttk.Entry(frame_map, textvariable=self.map_range_1, validate="key", validatecommand=vmr1, justify=tk.CENTER, font=font_md, width=6)
-        #self.entry_map_range_2 = ttk.Entry(frame_map, textvariable=self.map_range_2, validate="key", validatecommand=vmr2, justify=tk.CENTER, font=font_md, width=6)
+        label_map_range = ttk.Label(frame_map, text='Emission Range')
+        self.emission_range_1 = tk.DoubleVar(value=0)
+        self.emission_range_2 = tk.DoubleVar(value=1610)
+        self.entry_emission_range_1 = ttk.Entry(frame_map, textvariable=self.emission_range_1, validate="key", validatecommand=vmr1, justify=tk.CENTER, font=font_md, width=6)
+        self.entry_emission_range_2 = ttk.Entry(frame_map, textvariable=self.emission_range_2, validate="key", validatecommand=vmr2, justify=tk.CENTER, font=font_md, width=6)
+        self.entry_emission_range_1.config(state=tk.DISABLED)
+        self.entry_emission_range_2.config(state=tk.DISABLED)
         label_cmap_range = ttk.Label(frame_map, text='Color Range')
         self.cmap_range_1 = tk.DoubleVar(value=0)
         self.cmap_range_2 = tk.DoubleVar(value=100)
@@ -176,18 +178,21 @@ class MainWindow(tk.Frame):
         checkbox_show_refdata = ttk.Checkbutton(frame_map, text='Show Reference Data', command=self.on_change_show_ref_settings, variable=self.show_refdata, takefocus=False)
         self.show_ramanline = tk.BooleanVar(value=False)
         checkbox_show_ramanline = ttk.Checkbutton(frame_map, text='Show Raman Line', command=self.on_change_show_ramanline_settings, variable=self.show_ramanline, takefocus=False)
+        self.emission_autoscale = tk.BooleanVar(value=True)
+        checkbox_emission_autoscale = ttk.Checkbutton(frame_map, text='Emission Auto Scale', command=self.on_change_emission_settings, variable=self.emission_autoscale, takefocus=False)
 
-        label_map_range.grid(row=0, column=0, rowspan=2)
-        #self.entry_map_range_1.grid(row=1, column=1)
-        #self.entry_map_range_2.grid(row=1, column=2)
-        label_cmap_range.grid(row=2, column=0)
-        self.entry_cmap_range_1.grid(row=2, column=1)
-        self.entry_cmap_range_2.grid(row=2, column=2)
-        label_map_color.grid(row=3, column=0)
-        self.optionmenu_map_color.grid(row=3, column=1, columnspan=2, sticky=tk.EW)
-        checkbox_map_autoscale.grid(row=5, column=0, columnspan=4)
-        checkbox_show_refdata.grid(row=6, column=0, columnspan=4)
-        checkbox_show_ramanline.grid(row=7, column=0, columnspan=4)
+        checkbox_emission_autoscale.grid(row=0, column=0, columnspan=4)
+        label_map_range.grid(row=1, column=0, rowspan=2)
+        self.entry_emission_range_1.grid(row=1, column=1)
+        self.entry_emission_range_2.grid(row=1, column=2)
+        checkbox_map_autoscale.grid(row=3, column=0, columnspan=4)
+        label_cmap_range.grid(row=4, column=0)
+        self.entry_cmap_range_1.grid(row=4, column=1)
+        self.entry_cmap_range_2.grid(row=4, column=2)
+        label_map_color.grid(row=5, column=0)
+        self.optionmenu_map_color.grid(row=5, column=1, columnspan=2, sticky=tk.EW)
+        checkbox_show_refdata.grid(row=7, column=0, columnspan=4)
+        checkbox_show_ramanline.grid(row=8, column=0, columnspan=4)
 
         # canvas_drop
         self.canvas_drop = tk.Canvas(self.master, width=self.width_canvas, height=self.height_canvas)
@@ -196,15 +201,15 @@ class MainWindow(tk.Frame):
                                      font=('Arial', 30))
 
 
-    """
-    def validate_map_range_1(self, after):
+    @check_map_loaded
+    def validate_emission_range_1(self, after):
         if self.dl_raw.spec_dict is None:
             return False
         if is_num(after):
-            if float(after) < self.map_range_2.get():
-                cmap_range = self.map_manager.update_map(map_range=(float(after), self.map_range_2.get()))
-                self.cmap_range_1.set(round(cmap_range[0]))
-                self.cmap_range_2.set(round(cmap_range[1]))
+            if after == '-':
+                after = 0
+            if float(after) < self.emission_range_2.get():
+                self.update_plemap(emission_range=(float(after), self.emission_range_2.get()))
                 self.canvas.draw()
             return True
         elif after == '':
@@ -212,21 +217,21 @@ class MainWindow(tk.Frame):
         else:
             return False
 
-    def validate_map_range_2(self, after):
+    @check_map_loaded
+    def validate_emission_range_2(self, after):
         if self.dl_raw.spec_dict is None:
             return False
         if is_num(after):
-            if self.map_range_1.get() < float(after):
-                cmap_range = self.map_manager.update_map(map_range=(self.map_range_1.get(), float(after)))
-                self.cmap_range_1.set(round(cmap_range[0]))
-                self.cmap_range_2.set(round(cmap_range[1]))
+            if after == '-':
+                after = 0
+            if self.emission_range_1.get() < float(after):
+                self.update_plemap(emission_range=(self.emission_range_1.get(), float(after)))
                 self.canvas.draw()
             return True
         elif after == '':
             return True
         else:
             return False
-    """
 
     @check_map_loaded
     def validate_cmap_range_1(self, after):
@@ -307,6 +312,19 @@ class MainWindow(tk.Frame):
                 raman_txt.set_visible(False)
         self.canvas.draw()
 
+    @check_map_loaded
+    def on_change_emission_settings(self, *args) -> None:
+        if self.emission_autoscale.get():
+            self.entry_emission_range_1.config(state=tk.DISABLED)
+            self.entry_emission_range_2.config(state=tk.DISABLED)
+            self.emission_range_1.set(min(self.ple_x))
+            self.emission_range_2.set(max(self.ple_x))
+            self.update_plemap(emission_range=(self.emission_range_1.get(), self.emission_range_2.get()))
+        else:
+            self.entry_emission_range_1.config(state=tk.NORMAL)
+            self.entry_emission_range_2.config(state=tk.NORMAL)
+        self.canvas.draw()
+
     def download(self) -> None:
         pass # TODO download PLEmap
 
@@ -381,6 +399,9 @@ class MainWindow(tk.Frame):
         X, Y = np.meshgrid(self.ple_x, self.ple_y)
         Z = self.ple_df.values
 
+        self.emission_range_1.set(min(self.ple_x))
+        self.emission_range_2.set(max(self.ple_x))
+
         if self.map_autoscale.get():
             self.cmap_range_1.set(np.min(Z))
             self.cmap_range_2.set(np.max(Z))
@@ -439,11 +460,13 @@ class MainWindow(tk.Frame):
         self.raman_lines.append(self.map_ax.plot(filtered_df[col], filtered_df["excite_wavelength_nm"], color='black', linestyle='--')[0])
         self.raman_txts.append(self.map_ax.text(filtered_df[col][0], filtered_df["excite_wavelength_nm"][0], col.split("_")[0], fontsize=20, color='black', ha='left', va='bottom', alpha=0.8))
 
-    def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None) -> [float, float]:
+    def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None, emission_range: tuple = None) -> [float, float]:
         # カラーマップ関連の設定
         cmap = cmap if cmap is not None else self.map_color.get()
         cmap_range = cmap_range if cmap_range is not None else [self.cmap_range_1.get(), self.cmap_range_2.get()]
         self.contour.set(cmap=cmap, norm=Normalize(vmin=cmap_range[0], vmax=cmap_range[1]))
+        emission_range = emission_range if emission_range is not None else [self.emission_range_1.get(), self.emission_range_2.get()]
+        self.map_ax.set_xlim(emission_range[0], emission_range[1])
         return cmap_range
 
 
