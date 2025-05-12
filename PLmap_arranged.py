@@ -453,7 +453,7 @@ class MainWindow(tk.Frame):
         self.map_ax.grid()
 
     def _filter_plot(self, df:pd.DataFrame, col: str) -> None:
-        filtered_df = df[(min(self.ple_x) <= df[col]) & (df[col] <= max(self.ple_x))]
+        filtered_df = df[(min(self.map_ax.get_xlim()) <= df[col]) & (df[col] <= max(self.map_ax.get_xlim()))]
         filtered_df = filtered_df.reset_index(drop=True)
         if len(filtered_df) == 0:
             return
@@ -467,6 +467,37 @@ class MainWindow(tk.Frame):
         self.contour.set(cmap=cmap, norm=Normalize(vmin=cmap_range[0], vmax=cmap_range[1]))
         emission_range = emission_range if emission_range is not None else [self.emission_range_1.get(), self.emission_range_2.get()]
         self.map_ax.set_xlim(emission_range[0], emission_range[1])
+
+        self.lefebre_scatter.remove()
+
+        lefebre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        lefebre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
+        lefebre_df["E11_nm"] = 1240 / lefebre_df["E11_eV"]
+        lefebre_df["E22_nm"] = 1240 / lefebre_df["E22_eV"]
+        lefebre_df_filtered = lefebre_df[(min(self.map_ax.get_ylim()) <= lefebre_df["E22_nm"]) & (lefebre_df["E22_nm"] <= max(self.map_ax.get_ylim())) & (min(self.map_ax.get_xlim()) <= lefebre_df["E11_nm"]) & (lefebre_df["E11_nm"] <= max(self.map_ax.get_xlim()))]
+        self.lefebre_scatter = self.map_ax.scatter(lefebre_df_filtered["E11_nm"], lefebre_df_filtered["E22_nm"], color='black', s=70, label='LeFebre 2007', marker='x')
+        self.lefebre_txt =[]
+        for i in range(len(lefebre_df_filtered)):
+            self.lefebre_txt.append(self.map_ax.text(lefebre_df_filtered["E11_nm"].iloc[i], lefebre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebre_df_filtered["n"].iloc[i]))}, {str(int(lefebre_df_filtered["m"].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
+        self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
+        self.on_change_show_ref_settings()
+
+        #raman lineの表示
+        raman_df = pd.read_csv(r"data/PL_RamanLine.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        raman_df.columns = ["excite_wavelength_nm", "Rayleigh_eV", "D_nm", "D_eV", "G_nm", "2D_nm", "2G_nm", "G+2D_nm", "4D_nm", "2G+2D_nm", "G+4D_nm", "6D_nm"]
+        excitefiltered_raman_df = raman_df[(min(self.map_ax.get_ylim()) <= raman_df["excite_wavelength_nm"]) & (raman_df["excite_wavelength_nm"] <= max(self.map_ax.get_ylim()))]
+        self.raman_lines = []
+        self.raman_txts = []
+        #self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "D_nm")
+        self._filter_plot(excitefiltered_raman_df, "G_nm")
+        self._filter_plot(excitefiltered_raman_df, "2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "2G_nm")
+        self._filter_plot(excitefiltered_raman_df, "G+2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "4D_nm")
+        self._filter_plot(excitefiltered_raman_df, "2G+2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "G+4D_nm")
+        self._filter_plot(excitefiltered_raman_df, "6D_nm")
+        self.on_change_show_ramanline_settings()
         return cmap_range
 
 
