@@ -17,3 +17,6 @@ pip install -r requirements.txt
 
 # 注意点
 励起波長はファイル名の先頭にアンダースコア区切りで記載してください。
+
+# 謝辞
+このソフトウェアのソースコードは[PLusF](https://github.com/PLusF)氏が作成した[EasyCalibration](https://github.com/chiashi-lab/EasyCalibration)を参考にしています。
