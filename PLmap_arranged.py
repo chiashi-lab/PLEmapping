@@ -143,13 +143,17 @@ class MainWindow(tk.Frame):
         self.button_download.pack()
 
                 # frame_map
+        vasp = (self.register(self.validate_aspect), '%P')
         vmr1 = (self.register(self.validate_emission_range_1), '%P')
         vmr2 = (self.register(self.validate_emission_range_2), '%P')
         vcmr1 = (self.register(self.validate_cmap_range_1), '%P')
         vcmr2 = (self.register(self.validate_cmap_range_2), '%P')
+        self.aspect_ratio = tk.DoubleVar(value=3.0)
+        label_aspect_ratio = ttk.Label(frame_map, text='Aspect Ratio')
         label_map_range = ttk.Label(frame_map, text='Emission Range')
         self.emission_range_1 = tk.DoubleVar(value=0)
         self.emission_range_2 = tk.DoubleVar(value=1610)
+        self.entry_aspect_ratio = ttk.Entry(frame_map, textvariable=self.aspect_ratio, validate="key", validatecommand=vasp, justify=tk.CENTER, font=font_md, width=6)
         self.entry_emission_range_1 = ttk.Entry(frame_map, textvariable=self.emission_range_1, validate="key", validatecommand=vmr1, justify=tk.CENTER, font=font_md, width=6)
         self.entry_emission_range_2 = ttk.Entry(frame_map, textvariable=self.emission_range_2, validate="key", validatecommand=vmr2, justify=tk.CENTER, font=font_md, width=6)
         self.entry_emission_range_1.config(state=tk.DISABLED)
@@ -161,7 +165,7 @@ class MainWindow(tk.Frame):
         self.entry_cmap_range_2 = ttk.Entry(frame_map, textvariable=self.cmap_range_2, validate="key", validatecommand=vcmr2, justify=tk.CENTER, font=font_md, width=6)
         self.entry_cmap_range_1.config(state=tk.DISABLED)
         self.entry_cmap_range_2.config(state=tk.DISABLED)
-        self.map_color = tk.StringVar(value='rainbow')
+        self.map_color = tk.StringVar(value='jet')
         label_map_color = ttk.Label(frame_map, text='Color Map')
         self.optionmenu_map_color = ttk.OptionMenu(frame_map, self.map_color, self.map_color.get(),
                                            *sorted(['viridis', 'plasma', 'inferno', 'magma', 'cividis',
@@ -176,29 +180,51 @@ class MainWindow(tk.Frame):
         checkbox_map_autoscale = ttk.Checkbutton(frame_map, text='Color Map Auto Scale', command=self.on_change_cmap_settings, variable=self.map_autoscale, takefocus=False)
         self.show_refdata = tk.BooleanVar(value=False)
         checkbox_show_refdata = ttk.Checkbutton(frame_map, text='Show Reference Data', command=self.on_change_show_ref_settings, variable=self.show_refdata, takefocus=False)
+        self.show_legend = tk.BooleanVar(value=False)
+        checkbox_show_legend = ttk.Checkbutton(frame_map, text='Show Legend', command=self.on_change_show_ref_settings, variable=self.show_legend, takefocus=False)
         self.show_ramanline = tk.BooleanVar(value=False)
         checkbox_show_ramanline = ttk.Checkbutton(frame_map, text='Show Raman Line', command=self.on_change_show_ramanline_settings, variable=self.show_ramanline, takefocus=False)
         self.emission_autoscale = tk.BooleanVar(value=True)
         checkbox_emission_autoscale = ttk.Checkbutton(frame_map, text='Emission Auto Scale', command=self.on_change_emission_settings, variable=self.emission_autoscale, takefocus=False)
 
-        checkbox_emission_autoscale.grid(row=0, column=0, columnspan=4)
-        label_map_range.grid(row=1, column=0, rowspan=2)
-        self.entry_emission_range_1.grid(row=1, column=1)
-        self.entry_emission_range_2.grid(row=1, column=2)
-        checkbox_map_autoscale.grid(row=3, column=0, columnspan=4)
-        label_cmap_range.grid(row=4, column=0)
-        self.entry_cmap_range_1.grid(row=4, column=1)
-        self.entry_cmap_range_2.grid(row=4, column=2)
-        label_map_color.grid(row=5, column=0)
-        self.optionmenu_map_color.grid(row=5, column=1, columnspan=2, sticky=tk.EW)
-        checkbox_show_refdata.grid(row=7, column=0, columnspan=4)
-        checkbox_show_ramanline.grid(row=8, column=0, columnspan=4)
+        label_aspect_ratio.grid(row=0, column=0)
+        self.entry_aspect_ratio.grid(row=0, column=1, columnspan=3, sticky=tk.EW)
+        checkbox_emission_autoscale.grid(row=1, column=0, columnspan=4)
+        label_map_range.grid(row=2, column=0, rowspan=2)
+        self.entry_emission_range_1.grid(row=2, column=1)
+        self.entry_emission_range_2.grid(row=2, column=2)
+        checkbox_map_autoscale.grid(row=4, column=0, columnspan=4)
+        label_cmap_range.grid(row=5, column=0)
+        self.entry_cmap_range_1.grid(row=5, column=1)
+        self.entry_cmap_range_2.grid(row=5, column=2)
+        label_map_color.grid(row=6, column=0)
+        self.optionmenu_map_color.grid(row=6, column=1, columnspan=2, sticky=tk.EW)
+        checkbox_show_refdata.grid(row=8, column=0, columnspan=4)
+        checkbox_show_legend.grid(row=9, column=0, columnspan=4)
+        checkbox_show_ramanline.grid(row=10, column=0, columnspan=4)
 
         # canvas_drop
         self.canvas_drop = tk.Canvas(self.master, width=self.width_canvas, height=self.height_canvas)
         self.canvas_drop.create_rectangle(0, 0, self.width_canvas, self.height_canvas, fill='lightgray')
         self.canvas_drop.create_text(self.width_canvas / 2, self.height_canvas * 1 / 2, text='Data Drop Here',
                                      font=('Arial', 30))
+        
+        self.map_ax.set_aspect(self.aspect_ratio.get())
+
+    @check_map_loaded
+    def validate_aspect(self, after):
+        if self.dl_raw.spec_dict is None:
+            return False
+        if is_num(after):
+            if float(after) > 0:
+                self.aspect_ratio.set(float(after))
+                self.map_ax.set_aspect(self.aspect_ratio.get())
+                self.canvas.draw()
+            return True
+        elif after == '':
+            return True
+        else:
+            return False
 
 
     @check_map_loaded
