@@ -226,7 +226,6 @@ class MainWindow(tk.Frame):
         else:
             return False
 
-
     @check_map_loaded
     def validate_emission_range_1(self, after):
         if self.dl_raw.spec_dict is None:
@@ -235,7 +234,8 @@ class MainWindow(tk.Frame):
             if after == '-':
                 after = 0
             if float(after) < self.emission_range_2.get():
-                self.update_plemap(emission_range=(float(after), self.emission_range_2.get()))
+                self.update_plemap(emission_range=(float(after), self.emission_range_2.get()),
+                                    cmap_range_auto=self.map_autoscale.get())
                 self.canvas.draw()
             return True
         elif after == '':
@@ -251,7 +251,8 @@ class MainWindow(tk.Frame):
             if after == '-':
                 after = 0
             if self.emission_range_1.get() < float(after):
-                self.update_plemap(emission_range=(self.emission_range_1.get(), float(after)))
+                self.update_plemap(emission_range=(self.emission_range_1.get(), float(after)),
+                                    cmap_range_auto= self.map_autoscale.get())
                 self.canvas.draw()
             return True
         elif after == '':
@@ -314,14 +315,17 @@ class MainWindow(tk.Frame):
     def on_change_show_ref_settings(self, *args) -> None:
         if self.show_refdata.get():
             self.lefebre_scatter.set_visible(True)
-            self.legend.set_visible(True)
             for txt in self.lefebre_txt:
                 txt.set_visible(True)
+            if self.show_legend.get():
+                self.legend.set_visible(True)
         else:
             self.lefebre_scatter.set_visible(False)
             self.legend.set_visible(False)
             for txt in self.lefebre_txt:
                 txt.set_visible(False)
+        if not self.show_legend.get():
+            self.legend.set_visible(False)
         self.canvas.draw()
 
     @check_map_loaded
@@ -425,12 +429,12 @@ class MainWindow(tk.Frame):
         X, Y = np.meshgrid(self.ple_x, self.ple_y)
         Z = self.ple_df.values
 
-        self.emission_range_1.set(min(self.ple_x))
-        self.emission_range_2.set(max(self.ple_x))
+        self.emission_range_1.set(round(min(self.ple_x)))
+        self.emission_range_2.set(round(max(self.ple_x)))
 
         if self.map_autoscale.get():
-            self.cmap_range_1.set(np.min(Z))
-            self.cmap_range_2.set(np.max(Z))
+            self.cmap_range_1.set(round(np.min(Z)))
+            self.cmap_range_2.set(round(np.max(Z)))
         else:
             if self.cmap_range_1.get() > self.cmap_range_2.get():
                 messagebox.showerror('Error', 'Color range is invalid.')
@@ -486,16 +490,27 @@ class MainWindow(tk.Frame):
         self.raman_lines.append(self.map_ax.plot(filtered_df[col], filtered_df["excite_wavelength_nm"], color='black', linestyle='--')[0])
         self.raman_txts.append(self.map_ax.text(filtered_df[col][0], filtered_df["excite_wavelength_nm"][0], col.split("_")[0], fontsize=20, color='black', ha='left', va='bottom', alpha=0.8))
 
-    def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None, emission_range: tuple = None) -> [float, float]:
+    def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None, emission_range: tuple = None, emission_range_auto: bool = None) -> [float, float]:
+        # emission rangeの設定
+        emission_range = emission_range if emission_range is not None else [self.emission_range_1.get(), self.emission_range_2.get()]
+        self.map_ax.set_xlim(emission_range[0], emission_range[1])
         # カラーマップ関連の設定
         cmap = cmap if cmap is not None else self.map_color.get()
         cmap_range = cmap_range if cmap_range is not None else [self.cmap_range_1.get(), self.cmap_range_2.get()]
+        if cmap_range_auto is not None and cmap_range_auto:
+            emission_ranged_mask = ((emission_range[0] < self.ple_x) & (self.ple_x < emission_range[1]))
+            emission_ranged_values = np.array(self.ple_df.values)[:, emission_ranged_mask]
+            cmap_range = [np.min(emission_ranged_values), np.max(emission_ranged_values)]
+            self.cmap_range_1.set(round(cmap_range[0]))
+            self.cmap_range_2.set(round(cmap_range[1]))
         self.contour.set(cmap=cmap, norm=Normalize(vmin=cmap_range[0], vmax=cmap_range[1]))
-        emission_range = emission_range if emission_range is not None else [self.emission_range_1.get(), self.emission_range_2.get()]
-        self.map_ax.set_xlim(emission_range[0], emission_range[1])
 
+        # 既存refデータの削除
         self.lefebre_scatter.remove()
+        for txt in self.lefebre_txt:
+            txt.remove()
 
+        # refデータの再表示
         lefebre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
         lefebre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
         lefebre_df["E11_nm"] = 1240 / lefebre_df["E11_eV"]
@@ -507,6 +522,12 @@ class MainWindow(tk.Frame):
             self.lefebre_txt.append(self.map_ax.text(lefebre_df_filtered["E11_nm"].iloc[i], lefebre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebre_df_filtered["n"].iloc[i]))}, {str(int(lefebre_df_filtered["m"].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
         self.on_change_show_ref_settings()
+
+        # 既存raman lineの削除
+        for raman_line in self.raman_lines:
+            raman_line.remove()
+        for raman_txt in self.raman_txts:
+            raman_txt.remove()
 
         #raman lineの表示
         raman_df = pd.read_csv(r"data/PL_RamanLine.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
