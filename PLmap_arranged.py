@@ -314,15 +314,15 @@ class MainWindow(tk.Frame):
     @check_map_loaded
     def on_change_show_ref_settings(self, *args) -> None:
         if self.show_refdata.get():
-            self.lefebre_scatter.set_visible(True)
-            for txt in self.lefebre_txt:
+            self.lefebvre_scatter.set_visible(True)
+            for txt in self.lefebvre_txt:
                 txt.set_visible(True)
             if self.show_legend.get():
                 self.legend.set_visible(True)
         else:
-            self.lefebre_scatter.set_visible(False)
+            self.lefebvre_scatter.set_visible(False)
             self.legend.set_visible(False)
-            for txt in self.lefebre_txt:
+            for txt in self.lefebvre_txt:
                 txt.set_visible(False)
         if not self.show_legend.get():
             self.legend.set_visible(False)
@@ -448,15 +448,15 @@ class MainWindow(tk.Frame):
         # 既知のPLEmapデータを表示
         ple_tick_fontsize = 40
         ple_label_fontsize = 30
-        lefebre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        lefebre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
-        lefebre_df["E11_nm"] = 1240 / lefebre_df["E11_eV"]
-        lefebre_df["E22_nm"] = 1240 / lefebre_df["E22_eV"]
-        lefebre_df_filtered = lefebre_df[(min(self.ple_y) <= lefebre_df["E22_nm"]) & (lefebre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebre_df["E11_nm"]) & (lefebre_df["E11_nm"] <= max(self.ple_x))]
-        self.lefebre_scatter = self.map_ax.scatter(lefebre_df_filtered["E11_nm"], lefebre_df_filtered["E22_nm"], color='black', s=70, label='LeFebre 2007', marker='x')
-        self.lefebre_txt =[]
-        for i in range(len(lefebre_df_filtered)):
-            self.lefebre_txt.append(self.map_ax.text(lefebre_df_filtered["E11_nm"].iloc[i], lefebre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebre_df_filtered["n"].iloc[i]))}, {str(int(lefebre_df_filtered["m"].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
+        lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        lefebvre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
+        lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
+        lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
+        lefebvre_df_filtered = lefebvre_df[(min(self.ple_y) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.ple_x))]
+        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='x')
+        self.lefebvre_txt =[]
+        for i in range(len(lefebvre_df_filtered)):
+            self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
         self.on_change_show_ref_settings()
 
@@ -506,20 +506,20 @@ class MainWindow(tk.Frame):
         self.contour.set(cmap=cmap, norm=Normalize(vmin=cmap_range[0], vmax=cmap_range[1]))
 
         # 既存refデータの削除
-        self.lefebre_scatter.remove()
-        for txt in self.lefebre_txt:
+        self.lefebvre_scatter.remove()
+        for txt in self.lefebvre_txt:
             txt.remove()
 
         # refデータの再表示
-        lefebre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        lefebre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
-        lefebre_df["E11_nm"] = 1240 / lefebre_df["E11_eV"]
-        lefebre_df["E22_nm"] = 1240 / lefebre_df["E22_eV"]
-        lefebre_df_filtered = lefebre_df[(min(self.map_ax.get_ylim()) <= lefebre_df["E22_nm"]) & (lefebre_df["E22_nm"] <= max(self.map_ax.get_ylim())) & (min(self.map_ax.get_xlim()) <= lefebre_df["E11_nm"]) & (lefebre_df["E11_nm"] <= max(self.map_ax.get_xlim()))]
-        self.lefebre_scatter = self.map_ax.scatter(lefebre_df_filtered["E11_nm"], lefebre_df_filtered["E22_nm"], color='black', s=70, label='LeFebre 2007', marker='x')
-        self.lefebre_txt =[]
-        for i in range(len(lefebre_df_filtered)):
-            self.lefebre_txt.append(self.map_ax.text(lefebre_df_filtered["E11_nm"].iloc[i], lefebre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebre_df_filtered["n"].iloc[i]))}, {str(int(lefebre_df_filtered["m"].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
+        lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        lefebvre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
+        lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
+        lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
+        lefebvre_df_filtered = lefebvre_df[(min(self.map_ax.get_ylim()) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.map_ax.get_ylim())) & (min(self.map_ax.get_xlim()) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.map_ax.get_xlim()))]
+        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='x')
+        self.lefebvre_txt =[]
+        for i in range(len(lefebvre_df_filtered)):
+            self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
         self.on_change_show_ref_settings()
 
