@@ -179,7 +179,9 @@ class MainWindow(tk.Frame):
         self.map_autoscale = tk.BooleanVar(value=True)
         checkbox_map_autoscale = ttk.Checkbutton(frame_map, text='Color Map Auto Scale', command=self.on_change_cmap_settings, variable=self.map_autoscale, takefocus=False)
         self.show_refdata = tk.BooleanVar(value=False)
-        checkbox_show_refdata = ttk.Checkbutton(frame_map, text='Show Reference Data', command=self.on_change_show_ref_settings, variable=self.show_refdata, takefocus=False)
+        checkbox_show_refdata = ttk.Checkbutton(frame_map, text='Show suspended chirality', command=self.on_change_show_ref_settings, variable=self.show_refdata, takefocus=False)
+        self.show_bachidata = tk.BooleanVar(value=False)
+        checkbox_show_bachidata = ttk.Checkbutton(frame_map, text='Show dispersed chirality', command=self.on_change_show_bachidata_settings, variable=self.show_bachidata, takefocus=False)
         self.show_legend = tk.BooleanVar(value=False)
         checkbox_show_legend = ttk.Checkbutton(frame_map, text='Show Legend', command=self.on_change_show_ref_settings, variable=self.show_legend, takefocus=False)
         self.show_ramanline = tk.BooleanVar(value=False)
@@ -200,8 +202,9 @@ class MainWindow(tk.Frame):
         label_map_color.grid(row=6, column=0)
         self.optionmenu_map_color.grid(row=6, column=1, columnspan=2, sticky=tk.EW)
         checkbox_show_refdata.grid(row=8, column=0, columnspan=4)
-        checkbox_show_legend.grid(row=9, column=0, columnspan=4)
-        checkbox_show_ramanline.grid(row=10, column=0, columnspan=4)
+        checkbox_show_bachidata.grid(row=9, column=0, columnspan=4)
+        checkbox_show_legend.grid(row=10, column=0, columnspan=4)
+        checkbox_show_ramanline.grid(row=11, column=0, columnspan=4)
 
         # canvas_drop
         self.canvas_drop = tk.Canvas(self.master, width=self.width_canvas, height=self.height_canvas)
@@ -329,6 +332,11 @@ class MainWindow(tk.Frame):
         self.canvas.draw()
 
     @check_map_loaded
+    def on_change_show_bachidata_settings(self, *args) -> None:
+        # TODO: dispersed chirality data表示の実装
+        pass
+
+    @check_map_loaded
     def on_change_show_ramanline_settings(self, *args) -> None:
         if self.show_ramanline.get():
             for raman_line in self.raman_lines:
@@ -445,7 +453,7 @@ class MainWindow(tk.Frame):
         cax = divider.append_axes('right', size='5%', pad=0.1)
         pp = self.map_ax.figure.colorbar(self.contour, cax=cax, orientation='vertical')
 
-        # 既知のPLEmapデータを表示
+        # 架橋SWCNTのPLEmapデータを表示
         ple_tick_fontsize = 40
         ple_label_fontsize = 30
         lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
@@ -453,12 +461,16 @@ class MainWindow(tk.Frame):
         lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
         lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
         lefebvre_df_filtered = lefebvre_df[(min(self.ple_y) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.ple_x))]
-        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='x')
+        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='o')
         self.lefebvre_txt =[]
         for i in range(len(lefebvre_df_filtered)):
             self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
         self.on_change_show_ref_settings()
+        
+        # TODO:
+        # 分散SWCNTのPLEmapデータを表示
+
 
         #raman lineの表示
         raman_df = pd.read_csv(r"data/PL_RamanLine.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
@@ -510,7 +522,7 @@ class MainWindow(tk.Frame):
         for txt in self.lefebvre_txt:
             txt.remove()
 
-        # refデータの再表示
+        # 架橋SWCNTの再表示
         lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
         lefebvre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
         lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
@@ -522,6 +534,8 @@ class MainWindow(tk.Frame):
             self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
         self.on_change_show_ref_settings()
+        # TODO:
+        # 分散SWCNTのPLEmapデータを表示
 
         # 既存raman lineの削除
         for raman_line in self.raman_lines:
