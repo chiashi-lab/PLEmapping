@@ -333,8 +333,20 @@ class MainWindow(tk.Frame):
 
     @check_map_loaded
     def on_change_show_bachidata_settings(self, *args) -> None:
-        # TODO: dispersed chirality data表示の実装
-        pass
+        if self.show_bachidata.get():
+            self.bachilo_scatter.set_visible(True)
+            for txt in self.lefebvre_txt:
+                txt.set_visible(True)
+            if self.show_legend.get():
+                self.legend.set_visible(True)
+        else:
+            self.bachilo_scatter.set_visible(False)
+            self.legend.set_visible(False)
+            for txt in self.lefebvre_txt:
+                txt.set_visible(False)
+        if not self.show_legend.get():
+            self.legend.set_visible(False)
+        self.canvas.draw()
 
     @check_map_loaded
     def on_change_show_ramanline_settings(self, *args) -> None:
@@ -468,8 +480,30 @@ class MainWindow(tk.Frame):
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
         self.on_change_show_ref_settings()
         
-        # TODO:
         # 分散SWCNTのPLEmapデータを表示
+        bachilo_df = pd.read_csv(r"data/BachiloAssign.dat", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        bachilo_df.columns = ["n", "m", "dt", "E11_eV", "E22_eV", "theta", "E22/E11_eV"]
+        bachilo_df["E11_nm"] = 1240 / bachilo_df["E11_eV"]
+        bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
+        bachilo_df_filtered = bachilo_df[(min(self.ple_y) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.ple_x))]
+        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='red', s=70, label='Bachilo 2003', marker='^')
+        """
+        self.bachilo_txt =[]
+        for i in range(len(bachilo_df_filtered)):
+            self.bachilo_txt.append(self.map_ax.text(bachilo_df_filtered["E11_nm"].iloc[i], bachilo_df_filtered["E22_nm"].iloc[i], f"({str(int(bachilo_df_filtered['n'].iloc[i]))}, {str(int(bachilo_df_filtered['m'].iloc[i]))})", fontsize=30, color='red', ha='left', va='bottom'))
+        """
+        self.on_change_show_bachidata_settings()
+
+        """
+        #大気中のデータ点とミセル中のデータ点の間に線を引く
+        lefebvre_bachilo_df = pd.merge(lefebvre_df, bachilo_df, on=['n', 'm'], suffixes=('_lef', '_bach'))
+        for row in lefebvre_bachilo_df.itertuples():
+            if pd.isna(row.E11_nm_bach) or pd.isna(row.E22_nm_bach) or pd.isna(row.E11_nm_lef) or pd.isna(row.E22_nm_lef):
+                continue
+            self.map_ax.plot([row.E11_nm_lef, row.E11_nm_bach], [row.E22_nm_lef, row.E22_nm_bach], color='gray', linestyle='--', linewidth=1.0, alpha=0.7, label=None)
+            """
+
+
 
 
         #raman lineの表示
@@ -521,6 +555,9 @@ class MainWindow(tk.Frame):
         self.lefebvre_scatter.remove()
         for txt in self.lefebvre_txt:
             txt.remove()
+        self.bachilo_scatter.remove()
+        for txt in self.bachilo_txt:
+            txt.remove()
 
         # 架橋SWCNTの再表示
         lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
@@ -534,8 +571,18 @@ class MainWindow(tk.Frame):
             self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
         self.on_change_show_ref_settings()
-        # TODO:
         # 分散SWCNTのPLEmapデータを表示
+        bachilo_df = pd.read_csv(r"data/BachiloAssign.dat", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        bachilo_df.columns = ["n", "m", "dt", "E11_eV", "E22_eV", "theta", "E22/E11_eV"]
+        bachilo_df["E11_nm"] = 1240 / bachilo_df["E11_eV"]
+        bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
+        bachilo_df_filtered = bachilo_df[(min(self.map_ax.get_ylim()) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.map_ax.get_ylim())) & (min(self.map_ax.get_xlim()) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.map_ax.get_xlim()))]
+        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='red', s=70, label='Bachilo 2003', marker='^')
+        self.bachilo_txt =[]
+        for i in range(len(bachilo_df_filtered)):
+            self.bachilo_txt.append(self.map_ax.text(bachilo_df_filtered["E11_nm"].iloc[i], bachilo_df_filtered["E22_nm"].iloc[i], f"({str(int(bachilo_df_filtered['n'].iloc[i]))}, {str(int(bachilo_df_filtered['m'].iloc[i]))})", fontsize=30, color='red', ha='left', va='bottom'))
+        self.on_change_show_bachidata_settings()
+
 
         # 既存raman lineの削除
         for raman_line in self.raman_lines:
