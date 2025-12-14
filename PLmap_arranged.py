@@ -486,7 +486,7 @@ class MainWindow(tk.Frame):
         bachilo_df["E11_nm"] = 1240 / bachilo_df["E11_eV"]
         bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
         bachilo_df_filtered = bachilo_df[(min(self.ple_y) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.ple_x))]
-        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='red', s=70, label='Bachilo 2003', marker='^')
+        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='black', s=70, label='Bachilo 2003', marker='^')
         self.on_change_show_bachidata_settings()
 
         """
