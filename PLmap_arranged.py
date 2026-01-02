@@ -435,7 +435,59 @@ class MainWindow(tk.Frame):
                 open=True,
                 )
 
+    def _show_reference_plots(self) -> None:
+        # 架橋SWCNTのPLEmapデータを表示
+        lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        lefebvre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
+        lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
+        lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
+        lefebvre_df_filtered = lefebvre_df[(min(self.ple_y) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.ple_x))]
+        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='D')
+        self.lefebvre_txt =[]
+        for i in range(len(lefebvre_df_filtered)):
+            self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
+        
+        # 分散SWCNTのPLEmapデータを表示
+        bachilo_df = pd.read_csv(r"data/BachiloAssign.dat", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        bachilo_df.columns = ["n", "m", "dt", "E11_eV", "E22_eV", "theta", "E22/E11_eV"]
+        bachilo_df["E11_nm"] = 1240 / bachilo_df["E11_eV"]
+        bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
+        bachilo_df_filtered = bachilo_df[(min(self.ple_y) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.ple_x))]
+        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='black', s=70, label='Bachilo 2003', marker='x')
+
+        self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
+        self.on_change_show_ref_settings()
+        self.on_change_show_bachidata_settings()
+
+        """
+        #大気中のデータ点とミセル中のデータ点の間に線を引く
+        lefebvre_bachilo_df = pd.merge(lefebvre_df, bachilo_df, on=['n', 'm'], suffixes=('_lef', '_bach'))
+        for row in lefebvre_bachilo_df.itertuples():
+            if pd.isna(row.E11_nm_bach) or pd.isna(row.E22_nm_bach) or pd.isna(row.E11_nm_lef) or pd.isna(row.E22_nm_lef):
+                continue
+            self.map_ax.plot([row.E11_nm_lef, row.E11_nm_bach], [row.E22_nm_lef, row.E22_nm_bach], color='gray', linestyle='--', linewidth=1.0, alpha=0.7, label=None)
+            """
+
+        #raman lineの表示
+        raman_df = pd.read_csv(r"data/PL_RamanLine.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        raman_df.columns = ["excite_wavelength_nm", "Rayleigh_eV", "D_nm", "D_eV", "G_nm", "2D_nm", "2G_nm", "G+2D_nm", "4D_nm", "2G+2D_nm", "G+4D_nm", "6D_nm"]
+        excitefiltered_raman_df = raman_df[(min(self.ple_y) <= raman_df["excite_wavelength_nm"]) & (raman_df["excite_wavelength_nm"] <= max(self.ple_y))]
+        self.raman_lines = []
+        self.raman_txts = []
+        #self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "D_nm")
+        self._filter_plot(excitefiltered_raman_df, "G_nm")
+        self._filter_plot(excitefiltered_raman_df, "2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "2G_nm")
+        self._filter_plot(excitefiltered_raman_df, "G+2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "4D_nm")
+        self._filter_plot(excitefiltered_raman_df, "2G+2D_nm")
+        self._filter_plot(excitefiltered_raman_df, "G+4D_nm")
+        self._filter_plot(excitefiltered_raman_df, "6D_nm")
+        self.on_change_show_ramanline_settings()
+
     def show_plemap(self) -> None:
+        ple_tick_fontsize = 40
+        ple_label_fontsize = 30
         #ple mapの表示
         self.ple_df = {}
         for i, spectrum in enumerate(self.dl_raw.spec_dict.values()):
@@ -477,60 +529,8 @@ class MainWindow(tk.Frame):
             pad=0.02        # map との隙間
         )
 
-
-        # 架橋SWCNTのPLEmapデータを表示
-        ple_tick_fontsize = 40
-        ple_label_fontsize = 30
-        lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        lefebvre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
-        lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
-        lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
-        lefebvre_df_filtered = lefebvre_df[(min(self.ple_y) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.ple_x))]
-        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='D')
-        self.lefebvre_txt =[]
-        for i in range(len(lefebvre_df_filtered)):
-            self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
-        
-        # 分散SWCNTのPLEmapデータを表示
-        bachilo_df = pd.read_csv(r"data/BachiloAssign.dat", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        bachilo_df.columns = ["n", "m", "dt", "E11_eV", "E22_eV", "theta", "E22/E11_eV"]
-        bachilo_df["E11_nm"] = 1240 / bachilo_df["E11_eV"]
-        bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
-        bachilo_df_filtered = bachilo_df[(min(self.ple_y) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.ple_x))]
-        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='black', s=70, label='Bachilo 2003', marker='x')
-
-        self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
-        self.on_change_show_ref_settings()
-        self.on_change_show_bachidata_settings()
-
-        """
-        #大気中のデータ点とミセル中のデータ点の間に線を引く
-        lefebvre_bachilo_df = pd.merge(lefebvre_df, bachilo_df, on=['n', 'm'], suffixes=('_lef', '_bach'))
-        for row in lefebvre_bachilo_df.itertuples():
-            if pd.isna(row.E11_nm_bach) or pd.isna(row.E22_nm_bach) or pd.isna(row.E11_nm_lef) or pd.isna(row.E22_nm_lef):
-                continue
-            self.map_ax.plot([row.E11_nm_lef, row.E11_nm_bach], [row.E22_nm_lef, row.E22_nm_bach], color='gray', linestyle='--', linewidth=1.0, alpha=0.7, label=None)
-            """
-
-
-
-
-        #raman lineの表示
-        raman_df = pd.read_csv(r"data/PL_RamanLine.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        raman_df.columns = ["excite_wavelength_nm", "Rayleigh_eV", "D_nm", "D_eV", "G_nm", "2D_nm", "2G_nm", "G+2D_nm", "4D_nm", "2G+2D_nm", "G+4D_nm", "6D_nm"]
-        excitefiltered_raman_df = raman_df[(min(self.ple_y) <= raman_df["excite_wavelength_nm"]) & (raman_df["excite_wavelength_nm"] <= max(self.ple_y))]
-        self.raman_lines = []
-        self.raman_txts = []
-        #self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "D_nm")
-        self._filter_plot(excitefiltered_raman_df, "G_nm")
-        self._filter_plot(excitefiltered_raman_df, "2D_nm")
-        self._filter_plot(excitefiltered_raman_df, "2G_nm")
-        self._filter_plot(excitefiltered_raman_df, "G+2D_nm")
-        self._filter_plot(excitefiltered_raman_df, "4D_nm")
-        self._filter_plot(excitefiltered_raman_df, "2G+2D_nm")
-        self._filter_plot(excitefiltered_raman_df, "G+4D_nm")
-        self._filter_plot(excitefiltered_raman_df, "6D_nm")
-        self.on_change_show_ramanline_settings()
+        # 大気架橋とミセル分散の参照データとraman lineの表示
+        self._show_reference_plots()
 
         self.map_ax.tick_params(labelsize=ple_tick_fontsize)
         self.map_ax.set_xlabel('Emission Wavelength [nm]', fontsize=ple_label_fontsize)
@@ -570,50 +570,15 @@ class MainWindow(tk.Frame):
             txt.remove()
         self.bachilo_scatter.remove()
 
-        # 架橋SWCNTの再表示
-        lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        lefebvre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
-        lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
-        lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
-        lefebvre_df_filtered = lefebvre_df[(min(self.map_ax.get_ylim()) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.map_ax.get_ylim())) & (min(self.map_ax.get_xlim()) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.map_ax.get_xlim()))]
-        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='D')
-        self.lefebvre_txt =[]
-        for i in range(len(lefebvre_df_filtered)):
-            self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
-        self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
-        self.on_change_show_ref_settings()
-        # 分散SWCNTのPLEmapデータを表示
-        bachilo_df = pd.read_csv(r"data/BachiloAssign.dat", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        bachilo_df.columns = ["n", "m", "dt", "E11_eV", "E22_eV", "theta", "E22/E11_eV"]
-        bachilo_df["E11_nm"] = 1240 / bachilo_df["E11_eV"]
-        bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
-        bachilo_df_filtered = bachilo_df[(min(self.map_ax.get_ylim()) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.map_ax.get_ylim())) & (min(self.map_ax.get_xlim()) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.map_ax.get_xlim()))]
-        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='black', s=70, label='Bachilo 2003', marker='x')
-        self.on_change_show_bachidata_settings()
-
-
         # 既存raman lineの削除
         for raman_line in self.raman_lines:
             raman_line.remove()
         for raman_txt in self.raman_txts:
             raman_txt.remove()
 
-        #raman lineの表示
-        raman_df = pd.read_csv(r"data/PL_RamanLine.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
-        raman_df.columns = ["excite_wavelength_nm", "Rayleigh_eV", "D_nm", "D_eV", "G_nm", "2D_nm", "2G_nm", "G+2D_nm", "4D_nm", "2G+2D_nm", "G+4D_nm", "6D_nm"]
-        excitefiltered_raman_df = raman_df[(min(self.map_ax.get_ylim()) <= raman_df["excite_wavelength_nm"]) & (raman_df["excite_wavelength_nm"] <= max(self.map_ax.get_ylim()))]
-        self.raman_lines = []
-        self.raman_txts = []
-        #self.raman_lines.append(self._filter_plot(excitefiltered_raman_df, "D_nm")
-        self._filter_plot(excitefiltered_raman_df, "G_nm")
-        self._filter_plot(excitefiltered_raman_df, "2D_nm")
-        self._filter_plot(excitefiltered_raman_df, "2G_nm")
-        self._filter_plot(excitefiltered_raman_df, "G+2D_nm")
-        self._filter_plot(excitefiltered_raman_df, "4D_nm")
-        self._filter_plot(excitefiltered_raman_df, "2G+2D_nm")
-        self._filter_plot(excitefiltered_raman_df, "G+4D_nm")
-        self._filter_plot(excitefiltered_raman_df, "6D_nm")
-        self.on_change_show_ramanline_settings()
+        # 大気架橋とミセル分散の参照データとraman lineの再表示
+        self._show_reference_plots()
+
         return cmap_range
 
 
