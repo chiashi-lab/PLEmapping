@@ -486,12 +486,10 @@ class MainWindow(tk.Frame):
         lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
         lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
         lefebvre_df_filtered = lefebvre_df[(min(self.ple_y) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.ple_x))]
-        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='o')
+        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='D')
         self.lefebvre_txt =[]
         for i in range(len(lefebvre_df_filtered)):
             self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
-        self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
-        self.on_change_show_ref_settings()
         
         # 分散SWCNTのPLEmapデータを表示
         bachilo_df = pd.read_csv(r"data/BachiloAssign.dat", comment='#', header=None, engine='python', encoding='cp932', sep=None)
@@ -499,7 +497,10 @@ class MainWindow(tk.Frame):
         bachilo_df["E11_nm"] = 1240 / bachilo_df["E11_eV"]
         bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
         bachilo_df_filtered = bachilo_df[(min(self.ple_y) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.ple_x))]
-        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='black', s=70, label='Bachilo 2003', marker='^')
+        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='black', s=70, label='Bachilo 2003', marker='x')
+
+        self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
+        self.on_change_show_ref_settings()
         self.on_change_show_bachidata_settings()
 
         """
@@ -562,6 +563,7 @@ class MainWindow(tk.Frame):
             self.cbar.update_normal(self.contour)
 
 
+        # 描画範囲が変わる場合もあるので一度削除して再描画する
         # 既存refデータの削除
         self.lefebvre_scatter.remove()
         for txt in self.lefebvre_txt:
@@ -574,7 +576,7 @@ class MainWindow(tk.Frame):
         lefebvre_df["E11_nm"] = 1240 / lefebvre_df["E11_eV"]
         lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
         lefebvre_df_filtered = lefebvre_df[(min(self.map_ax.get_ylim()) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.map_ax.get_ylim())) & (min(self.map_ax.get_xlim()) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.map_ax.get_xlim()))]
-        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='x')
+        self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='D')
         self.lefebvre_txt =[]
         for i in range(len(lefebvre_df_filtered)):
             self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
@@ -586,7 +588,7 @@ class MainWindow(tk.Frame):
         bachilo_df["E11_nm"] = 1240 / bachilo_df["E11_eV"]
         bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
         bachilo_df_filtered = bachilo_df[(min(self.map_ax.get_ylim()) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.map_ax.get_ylim())) & (min(self.map_ax.get_xlim()) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.map_ax.get_xlim()))]
-        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='red', s=70, label='Bachilo 2003', marker='^')
+        self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='black', s=70, label='Bachilo 2003', marker='x')
         self.on_change_show_bachidata_settings()
 
 
