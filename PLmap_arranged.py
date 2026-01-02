@@ -7,7 +7,6 @@ from tkinterdnd2 import TkinterDnD, DND_FILES
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.colors import Normalize
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from dataloader import DataLoader
 import pandas as pd
 
