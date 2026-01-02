@@ -38,9 +38,9 @@ plt.rcParams['legend.fancybox'] = False     # Trueにすると囲いの四隅が
 plt.rcParams['lines.linewidth'] = 1.0
 plt.rcParams['image.cmap'] = 'jet'
 plt.rcParams['figure.subplot.top'] = 0.95
-plt.rcParams['figure.subplot.bottom'] = 0.15
+plt.rcParams['figure.subplot.bottom'] = 0.1
 plt.rcParams['figure.subplot.left'] = 0.1
-plt.rcParams['figure.subplot.right'] = 0.95
+plt.rcParams['figure.subplot.right'] = 0.9
 
 def is_num(s):
     try:
@@ -113,8 +113,10 @@ class MainWindow(tk.Frame):
         else:
             fig = plt.figure(figsize=(self.width_canvas / dpi, self.height_canvas / dpi), dpi=dpi)
 
-        self.ax = fig.add_subplot(211)
-        self.map_ax = fig.add_subplot(212)
+        self.subplot_height_ratios = (1, 2)
+        gs = fig.add_gridspec(nrows=2, ncols=1, height_ratios=self.subplot_height_ratios, hspace=0.1)
+        self.ax = fig.add_subplot(gs[0, 0])
+        self.map_ax = fig.add_subplot(gs[1, 0])
 
         self.canvas = FigureCanvasTkAgg(fig, self.master)
         self.canvas.get_tk_widget().grid(row=0, column=0, rowspan=3)
@@ -461,9 +463,20 @@ class MainWindow(tk.Frame):
                 return
         self.contour = self.map_ax.pcolormesh(X, Y, Z, cmap=self.map_color.get(), shading='auto', norm=Normalize(vmin=self.cmap_range_1.get(), vmax=self.cmap_range_2.get()))
 
-        divider = make_axes_locatable(self.map_ax)
-        cax = divider.append_axes('right', size='5%', pad=0.1)
-        pp = self.map_ax.figure.colorbar(self.contour, cax=cax, orientation='vertical')
+        # 既存のカラーバーがあれば削除（show_plemapが複数回呼ばれると増殖するのも防げます）
+        if getattr(self, "cbar", None) is not None:
+            self.cbar.remove()
+            self.cbar = None
+
+        # map_ax に紐づけてカラーバーを作る（map_ax が変に縮まない）
+        self.cbar = self.map_ax.figure.colorbar(
+            self.contour,
+            ax=self.map_ax,
+            orientation='vertical',
+            fraction=0.03,  # 棒の太さ（お好みで 0.02〜0.05 くらい）
+            pad=0.02        # map との隙間
+        )
+
 
         # 架橋SWCNTのPLEmapデータを表示
         ple_tick_fontsize = 40
@@ -545,6 +558,9 @@ class MainWindow(tk.Frame):
             self.cmap_range_1.set(round(cmap_range[0]))
             self.cmap_range_2.set(round(cmap_range[1]))
         self.contour.set(cmap=cmap, norm=Normalize(vmin=cmap_range[0], vmax=cmap_range[1]))
+        if getattr(self, "cbar", None) is not None:
+            self.cbar.update_normal(self.contour)
+
 
         # 既存refデータの削除
         self.lefebvre_scatter.remove()
