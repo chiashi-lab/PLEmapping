@@ -7,6 +7,7 @@ from tkinterdnd2 import TkinterDnD, DND_FILES
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.colors import Normalize
+import matplotlib.patheffects as path_effects
 from dataloader import DataLoader
 import pandas as pd
 
@@ -183,6 +184,8 @@ class MainWindow(tk.Frame):
         checkbox_show_refdata = ttk.Checkbutton(frame_map, text='Show suspended chirality', command=self.on_change_show_ref_settings, variable=self.show_refdata, takefocus=False)
         self.show_bachidata = tk.BooleanVar(value=False)
         checkbox_show_bachidata = ttk.Checkbutton(frame_map, text='Show dispersed chirality', command=self.on_change_show_bachidata_settings, variable=self.show_bachidata, takefocus=False)
+        self.show_kiowski = tk.BooleanVar(value=False)
+        checkbox_show_kiowski = ttk.Checkbutton(frame_map, text='Show vacuum (Kiowski)', command=self.on_change_show_kiowski_settings, variable=self.show_kiowski, takefocus=False)
         self.show_legend = tk.BooleanVar(value=False)
         checkbox_show_legend = ttk.Checkbutton(frame_map, text='Show Legend', command=self.on_change_show_ref_settings, variable=self.show_legend, takefocus=False)
         self.show_ramanline = tk.BooleanVar(value=False)
@@ -204,9 +207,21 @@ class MainWindow(tk.Frame):
         self.optionmenu_map_color.grid(row=6, column=1, columnspan=2, sticky=tk.EW)
         checkbox_show_refdata.grid(row=8, column=0, columnspan=4)
         checkbox_show_bachidata.grid(row=9, column=0, columnspan=4)
-        checkbox_show_legend.grid(row=10, column=0, columnspan=4)
-        checkbox_show_ramanline.grid(row=11, column=0, columnspan=4)
+        checkbox_show_kiowski.grid(row=10, column=0, columnspan=4)
+        checkbox_show_legend.grid(row=11, column=0, columnspan=4)
+        checkbox_show_ramanline.grid(row=12, column=0, columnspan=4)
 
+        # frame for reference selection
+        frame_ref = ttk.LabelFrame(self.master, text='References')
+        frame_ref.grid(row=2, column=1, sticky=tk.N)
+        self.ref_listbox = tk.Listbox(frame_ref, height=8, width=36, font=font_sm)
+        self.ref_scroll = ttk.Scrollbar(frame_ref, orient=tk.VERTICAL, command=self.ref_listbox.yview)
+        self.ref_listbox.config(yscrollcommand=self.ref_scroll.set)
+        self.ref_listbox.grid(row=0, column=0, sticky=tk.NW)
+        self.ref_scroll.grid(row=0, column=1, sticky=tk.NS)
+        self.ref_listbox.bind('<<ListboxSelect>>', lambda e: self.on_ref_select(e))
+        btn_clear_ref = ttk.Button(frame_ref, text='Clear Selection', command=self.clear_ref_selection)
+        btn_clear_ref.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(6,0))
         # canvas_drop
         self.canvas_drop = tk.Canvas(self.master, width=self.width_canvas, height=self.height_canvas)
         self.canvas_drop.create_rectangle(0, 0, self.width_canvas, self.height_canvas, fill='lightgray')
@@ -350,6 +365,21 @@ class MainWindow(tk.Frame):
         self.canvas.draw()
 
     @check_map_loaded
+    def on_change_show_kiowski_settings(self, *args) -> None:
+        if getattr(self, 'kiowski_scatter', None) is not None:
+            if getattr(self, 'show_kiowski', None) is not None and self.show_kiowski.get():
+                self.kiowski_scatter.set_visible(True)
+                for txt in self.kiowski_txt:
+                    txt.set_visible(True)
+                if self.show_legend.get():
+                    self.legend.set_visible(True)
+            else:
+                self.kiowski_scatter.set_visible(False)
+                for txt in self.kiowski_txt:
+                    txt.set_visible(False)
+        self.canvas.draw()
+
+    @check_map_loaded
     def on_change_show_ramanline_settings(self, *args) -> None:
         if self.show_ramanline.get():
             for raman_line in self.raman_lines:
@@ -434,7 +464,181 @@ class MainWindow(tk.Frame):
                 open=True,
                 )
 
+    def populate_ref_listbox(self, lefebvre_df_filtered: pd.DataFrame, bachilo_df_filtered: pd.DataFrame, kiowski_df_filtered: pd.DataFrame = None) -> None:
+        # lefebvre_df_filtered, bachilo_df_filtered, kiowski_df_filtered are expected to be reset_index'd
+        self.ref_listbox.delete(0, tk.END)
+        self.ref_items = []
+        # add lefebvre entries
+        for i, row in lefebvre_df_filtered.reset_index(drop=True).iterrows():
+            label = f"L ({int(row['n'])},{int(row['m'])}) E11={round(row['E11_nm'],1)} E22={round(row['E22_nm'],1)}"
+            self.ref_listbox.insert(tk.END, label)
+            self.ref_items.append(('L', i))
+        # add bachilo entries
+        for i, row in bachilo_df_filtered.reset_index(drop=True).iterrows():
+            label = f"B ({int(row['n'])},{int(row['m'])}) E11={round(row['E11_nm'],1)} E22={round(row['E22_nm'],1)}"
+            self.ref_listbox.insert(tk.END, label)
+            self.ref_items.append(('B', i))
+        # add kiowski entries
+        if kiowski_df_filtered is not None:
+            for i, row in kiowski_df_filtered.reset_index(drop=True).iterrows():
+                label = f"K ({int(row['n'])},{int(row['m'])}) E11={round(row['E11_nm'],1)} E22={round(row['E22_nm'],1)}"
+                self.ref_listbox.insert(tk.END, label)
+                self.ref_items.append(('K', i))
+        # store filtered dfs for lookup
+        self.ref_filtered_lefebvre = lefebvre_df_filtered.reset_index(drop=True)
+        self.ref_filtered_bachilo = bachilo_df_filtered.reset_index(drop=True)
+        self.ref_filtered_kiowski = kiowski_df_filtered.reset_index(drop=True) if kiowski_df_filtered is not None else None
+
+    def on_ref_select(self, event) -> None:
+        if not hasattr(self, 'ref_items') or len(self.ref_items) == 0:
+            return
+        sel = self.ref_listbox.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        kind, row_idx = self.ref_items[idx]
+        # remove existing highlight
+        # support multiple highlight artists
+        if getattr(self, 'ref_highlights', None) is not None:
+            try:
+                for artist in list(self.ref_highlights):
+                    artist.remove()
+            except Exception:
+                pass
+            try:
+                for txt in getattr(self, 'ref_highlight_txts', []):
+                    txt.remove()
+            except Exception:
+                pass
+            self.ref_highlights = []
+            self.ref_highlight_txts = []
+
+        # determine selected (n,m) and plot matching entries from both datasets
+        if kind == 'L':
+            selected_row = self.ref_filtered_lefebvre.iloc[row_idx]
+        elif kind == 'B':
+            selected_row = self.ref_filtered_bachilo.iloc[row_idx]
+        else:  # kind == 'K'
+            selected_row = self.ref_filtered_kiowski.iloc[row_idx]
+        sel_n = int(selected_row['n'])
+        sel_m = int(selected_row['m'])
+
+        self.ref_highlights = []
+        self.ref_highlight_txts = []
+
+        # helper to plot matches from a source dataframe and scatter
+        def _plot_matches(df, scatter_source, marker_prefix):
+            matches = df[(df['n'] == sel_n) & (df['m'] == sel_m)].reset_index(drop=True)
+            coords = []
+            for i in range(len(matches)):
+                r = matches.iloc[i]
+                x = r['E11_nm']
+                y = r['E22_nm']
+                coords.append((x, y))
+                # derive size from scatter_source
+                try:
+                    sizes = scatter_source.get_sizes()
+                    s = float(sizes[0]) if len(sizes) > 0 else 70
+                except Exception:
+                    s = 70
+                # derive color
+                orig_color = None
+                try:
+                    ec = scatter_source.get_edgecolors()
+                    if len(ec) > 0:
+                        orig_color = tuple(ec[0])
+                except Exception:
+                    pass
+                if orig_color is None:
+                    try:
+                        fc = scatter_source.get_facecolors()
+                        if len(fc) > 0:
+                            orig_color = tuple(fc[0])
+                    except Exception:
+                        pass
+                if orig_color is None:
+                    orig_color = 'black'
+                art = self.map_ax.scatter([x], [y], s=s, marker=marker_prefix, color=orig_color, zorder=10)
+                art.set_path_effects([path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
+                self.ref_highlights.append(art)
+            return coords
+
+        # plot lefebvre matches and bachilo matches, collect coords for labeling
+        coords = []
+        coords += _plot_matches(self.ref_filtered_lefebvre, self.lefebvre_scatter, 'D')
+        coords += _plot_matches(self.ref_filtered_bachilo, self.bachilo_scatter, 'x')
+        if self.ref_filtered_kiowski is not None:
+            coords += _plot_matches(self.ref_filtered_kiowski, self.kiowski_scatter, 'o')
+
+        # place a single label for this (n,m) at the centroid of plotted points,
+        # offset by a few points so it doesn't overlap the marker
+        if len(coords) > 0:
+            xs = [c[0] for c in coords]
+            ys = [c[1] for c in coords]
+            cx = sum(xs) / len(xs)
+            cy = sum(ys) / len(ys)
+            label_text = f"({sel_n},{sel_m})"
+            txt = self.map_ax.annotate(label_text, xy=(cx, cy), xytext=(5, 5), textcoords='offset points', fontsize=28, color='black', ha='left', va='bottom', zorder=11)
+            txt.set_path_effects([path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
+            self.ref_highlight_txts = [txt]
+        else:
+            self.ref_highlight_txts = []
+        # ensure legend visible if needed
+        self.canvas.draw()
+
+    def clear_ref_selection(self) -> None:
+        # remove either single highlight or multiple highlights
+        if getattr(self, 'ref_highlights', None) is not None:
+            try:
+                for artist in list(self.ref_highlights):
+                    artist.remove()
+            except Exception:
+                pass
+            try:
+                for txt in getattr(self, 'ref_highlight_txts', []):
+                    txt.remove()
+            except Exception:
+                pass
+            self.ref_highlights = []
+            self.ref_highlight_txts = []
+        elif getattr(self, 'ref_highlight', None) is not None:
+            try:
+                self.ref_highlight.remove()
+            except Exception:
+                pass
+            try:
+                for txt in getattr(self, 'ref_highlight_txts', []):
+                    txt.remove()
+            except Exception:
+                pass
+            self.ref_highlight = None
+            self.ref_highlight_txts = []
+        try:
+            self.ref_listbox.selection_clear(0, tk.END)
+        except Exception:
+            pass
+        self.canvas.draw()
+
     def _show_reference_plots(self) -> None:
+        # 真空中SWCNTのPLEmapデータを表示
+        kiowski_df = pd.read_csv(r"data/Kiowski_PRB075421.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
+        kiowski_df.columns = ["n", "m", "E11_nm", "E22_nm", "dt", "mod", "E22/E11_eV", "2m+n", "theta", "2n+m"]
+        kiowski_df_filtered = kiowski_df[(min(self.ple_y) <= kiowski_df["E22_nm"]) & (kiowski_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= kiowski_df["E11_nm"]) & (kiowski_df["E11_nm"] <= max(self.ple_x))]
+        self.kiowski_scatter = self.map_ax.scatter(kiowski_df_filtered["E11_nm"], kiowski_df_filtered["E22_nm"], color='black', s=70, label='Kiowski 2006', marker='o')
+        self.kiowski_scatter.set_path_effects([path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
+        self.kiowski_txt = []
+        for i in range(len(kiowski_df_filtered)):
+            x = kiowski_df_filtered["E11_nm"].iloc[i]
+            y = kiowski_df_filtered["E22_nm"].iloc[i]
+            # small deterministic offsets to avoid overlap (in offset points)
+            off_x = 5 + (i % 3) * 4
+            off_y = 5 + ((i // 3) % 3) * 4
+            txt = self.map_ax.annotate(
+                f"({str(int(kiowski_df_filtered['n'].iloc[i]))}, {str(int(kiowski_df_filtered['m'].iloc[i]))})",
+                xy=(x, y), xytext=(off_x, off_y), textcoords='offset points', fontsize=30, color='black', ha='left', va='bottom')
+            txt.set_path_effects([path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
+            self.kiowski_txt.append(txt)
+
         # 架橋SWCNTのPLEmapデータを表示
         lefebvre_df = pd.read_csv(r"data/data#530.txt", comment='#', header=None, engine='python', encoding='cp932', sep=None)
         lefebvre_df.columns = ["n", "m", "dt", "mod", "theta", "E11_eV", "E22_eV", "E12_eV", "EL1_eV", "EL1*_eV", "E22+G_eV", "E22+2G_eV", "ET1_eV", "ET2_eV"]
@@ -442,9 +646,18 @@ class MainWindow(tk.Frame):
         lefebvre_df["E22_nm"] = 1240 / lefebvre_df["E22_eV"]
         lefebvre_df_filtered = lefebvre_df[(min(self.ple_y) <= lefebvre_df["E22_nm"]) & (lefebvre_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= lefebvre_df["E11_nm"]) & (lefebvre_df["E11_nm"] <= max(self.ple_x))]
         self.lefebvre_scatter = self.map_ax.scatter(lefebvre_df_filtered["E11_nm"], lefebvre_df_filtered["E22_nm"], color='black', s=70, label='lefebvre 2007', marker='D')
+        self.lefebvre_scatter.set_path_effects([path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
         self.lefebvre_txt =[]
         for i in range(len(lefebvre_df_filtered)):
-            self.lefebvre_txt.append(self.map_ax.text(lefebvre_df_filtered["E11_nm"].iloc[i], lefebvre_df_filtered["E22_nm"].iloc[i], f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})", fontsize=30, color='black', ha='left', va='bottom'))
+            x = lefebvre_df_filtered["E11_nm"].iloc[i]
+            y = lefebvre_df_filtered["E22_nm"].iloc[i]
+            off_x = 5 + (i % 3) * 4
+            off_y = 5 + ((i // 3) % 3) * 4
+            txt = self.map_ax.annotate(
+                f"({str(int(lefebvre_df_filtered['n'].iloc[i]))}, {str(int(lefebvre_df_filtered['m'].iloc[i]))})",
+                xy=(x, y), xytext=(off_x, off_y), textcoords='offset points', fontsize=30, color='black', ha='left', va='bottom')
+            txt.set_path_effects([path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
+            self.lefebvre_txt.append(txt)
         
         # 分散SWCNTのPLEmapデータを表示
         bachilo_df = pd.read_csv(r"data/BachiloAssign.dat", comment='#', header=None, engine='python', encoding='cp932', sep=None)
@@ -453,10 +666,17 @@ class MainWindow(tk.Frame):
         bachilo_df["E22_nm"] = 1240 / bachilo_df["E22_eV"]
         bachilo_df_filtered = bachilo_df[(min(self.ple_y) <= bachilo_df["E22_nm"]) & (bachilo_df["E22_nm"] <= max(self.ple_y)) & (min(self.ple_x) <= bachilo_df["E11_nm"]) & (bachilo_df["E11_nm"] <= max(self.ple_x))]
         self.bachilo_scatter = self.map_ax.scatter(bachilo_df_filtered["E11_nm"], bachilo_df_filtered["E22_nm"], color='black', s=70, label='Bachilo 2003', marker='x')
-
+        self.bachilo_scatter.set_path_effects([path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
         self.legend = self.map_ax.legend(loc='upper right', fontsize=20)
+        # populate reference selection listbox with filtered entries
+        try:
+            self.populate_ref_listbox(lefebvre_df_filtered, bachilo_df_filtered, kiowski_df_filtered)
+        except Exception:
+            # ignore if UI not created yet or other issue
+            pass
         self.on_change_show_ref_settings()
         self.on_change_show_bachidata_settings()
+        self.on_change_show_kiowski_settings()
 
         """
         #大気中のデータ点とミセル中のデータ点の間に線を引く
@@ -485,8 +705,8 @@ class MainWindow(tk.Frame):
         self.on_change_show_ramanline_settings()
 
     def show_plemap(self) -> None:
-        ple_tick_fontsize = 40
-        ple_label_fontsize = 30
+        ple_tick_fontsize = 45
+        ple_label_fontsize = 40
         #ple mapの表示
         self.ple_df = {}
         for i, spectrum in enumerate(self.dl_raw.spec_dict.values()):
@@ -542,7 +762,9 @@ class MainWindow(tk.Frame):
         if len(filtered_df) == 0:
             return
         self.raman_lines.append(self.map_ax.plot(filtered_df[col], filtered_df["excite_wavelength_nm"], color='black', linestyle='--')[0])
-        self.raman_txts.append(self.map_ax.text(filtered_df[col][0], filtered_df["excite_wavelength_nm"][0], col.split("_")[0], fontsize=20, color='black', ha='left', va='bottom', alpha=0.8))
+        txt = self.map_ax.text(filtered_df[col][0], filtered_df["excite_wavelength_nm"][0], col.split("_")[0], fontsize=20, color='black', ha='left', va='bottom')
+        txt.set_path_effects([path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
+        self.raman_txts.append(txt)
 
     def update_plemap(self, cmap: str = None, cmap_range: tuple = None, cmap_range_auto: bool = None, emission_range: tuple = None, emission_range_auto: bool = None) -> [float, float]:
         # emission rangeの設定
@@ -568,6 +790,10 @@ class MainWindow(tk.Frame):
         for txt in self.lefebvre_txt:
             txt.remove()
         self.bachilo_scatter.remove()
+        if hasattr(self, 'kiowski_scatter'):
+            self.kiowski_scatter.remove()
+            for txt in self.kiowski_txt:
+                txt.remove()
 
         # 既存raman lineの削除
         for raman_line in self.raman_lines:
